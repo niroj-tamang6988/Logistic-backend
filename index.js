@@ -67,16 +67,29 @@ const auth = (req, res, next) => {
 app.post('/api/login', (req, res) => {
     try {
         const { email, password } = req.body;
+        console.log('Login attempt:', { email, passwordLength: password?.length });
         
         db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
             if (err) {
                 console.error('Login query error:', err);
                 return res.status(500).json({ message: 'Server error' });
             }
-            if (results.length === 0) return res.status(400).json({ message: 'User not found' });
+            
+            console.log('Query results:', { count: results.length, email });
+            
+            if (results.length === 0) {
+                return res.status(400).json({ 
+                    message: 'User not found',
+                    debug: { searchedEmail: email, emailLength: email?.length }
+                });
+            }
             
             const user = results[0];
+            console.log('User found:', { id: user.id, email: user.email, role: user.role });
+            
             const isMatch = await bcrypt.compare(password, user.password);
+            console.log('Password match:', isMatch);
+            
             if (!isMatch) return res.status(400).json({ message: 'Invalid password' });
             
             if (!user.is_approved && user.role !== 'admin') {
