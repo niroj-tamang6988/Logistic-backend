@@ -19,6 +19,27 @@ app.get('/api/health', (req, res) => {
     res.json({ message: 'API is healthy', timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint to check database
+app.get('/api/debug/users', (req, res) => {
+    db.query('SELECT id, name, email, role FROM users', (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ users: results, count: results.length });
+    });
+});
+
+// Debug endpoint to check specific user
+app.get('/api/debug/user/:email', (req, res) => {
+    const email = req.params.email;
+    db.query('SELECT id, name, email, role FROM users WHERE email = ?', [email], (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ found: results.length > 0, user: results[0] || null });
+    });
+});
+
 // Database connection
 const db = mysql.createConnection({
     host: process.env.DB_HOST,
