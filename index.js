@@ -66,6 +66,34 @@ const auth = (req, res, next) => {
     }
 };
 
+// Register route
+app.post('/api/register', async (req, res) => {
+    try {
+        const { name, email, password, role } = req.body;
+        console.log('Register attempt:', { name, email, role });
+        
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const isApproved = role === 'admin' ? true : false;
+        
+        db.query('INSERT INTO users (name, email, password, role, is_approved) VALUES (?, ?, ?, ?, ?)', 
+            [name, email, hashedPassword, role, isApproved], (err, result) => {
+            if (err) {
+                console.error('Register error:', err);
+                if (err.code === 'ER_DUP_ENTRY') {
+                    return res.status(400).json({ message: 'Email already exists' });
+                }
+                return res.status(500).json({ message: 'Server error' });
+            }
+            const message = role === 'admin' ? 'Admin registered successfully' : 'Registration successful. Please wait for admin approval to login.';
+            res.json({ message });
+        });
+    } catch (error) {
+        console.error('Register error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // Login route
 app.post('/api/login', (req, res) => {
     try {
