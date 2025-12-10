@@ -12,11 +12,25 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static('uploads'));
+// Static file serving (skip in serverless)
+if (process.env.NODE_ENV !== 'production') {
+    app.use('/uploads', express.static('uploads'));
+}
 
-// Create uploads directory if it doesn't exist
-if (!fs.existsSync('uploads')) {
-    fs.mkdirSync('uploads');
+// Health check route
+app.get('/', (req, res) => {
+    res.json({ message: 'Delivery Management System API is running', status: 'OK' });
+});
+
+app.get('/api/health', (req, res) => {
+    res.json({ message: 'API is healthy', timestamp: new Date().toISOString() });
+});
+
+// Create uploads directory if it doesn't exist (skip in serverless)
+if (process.env.NODE_ENV !== 'production') {
+    if (!fs.existsSync('uploads')) {
+        fs.mkdirSync('uploads');
+    }
 }
 
 // Configure multer for file uploads
@@ -47,7 +61,8 @@ const db = mysql.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT || 3306
 });
 
 // Auth middleware
@@ -839,13 +854,21 @@ app.get('/api/rider-daybook-monthly', auth, (req, res) => {
 
 const PORT = process.env.PORT || 5001;
 
-// Test database connection on startup
-db.query('SELECT 1', (err) => {
-    if (err) {
-        console.error('Database connection failed:', err.message);
-        process.exit(1);
-    }
-    console.log('Database connected successfully');
-});
+// Test database connection on startup (only in development)
+if (process.env.NODE_ENV !== 'production') {
+    db.query('SELECT 1', (err) => {
+        if (err) {
+            console.error('Database connection failed:', err.message);
+            console.log('Continuing without database connection for development...');
+        } else {
+            console.log('Database connected successfully');
+        }
+    });
+}
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Export for Vercel serverless
+if (process.env.NODE_ENV === 'production') {
+    module.exports = app;
+} else {
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
