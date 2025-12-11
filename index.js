@@ -492,6 +492,49 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
+// Delete user endpoint
+app.delete('/api/users/:id', auth, (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        db.query('DELETE FROM users WHERE id = ? AND role IN ("vendor", "rider")', [req.params.id], (err, result) => {
+            if (err) {
+                console.error('Delete user error:', err);
+                return res.status(500).json({ message: 'Error deleting user' });
+            }
+            res.json({ message: 'User deleted successfully' });
+        });
+    } catch (error) {
+        console.error('Delete user error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Approve user endpoint
+app.put('/api/users/:id/approve', auth, (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        db.query('UPDATE users SET is_approved = 1 WHERE id = ? AND role IN ("vendor", "rider")', [req.params.id], (err, result) => {
+            if (err) {
+                console.error('Approve user error:', err);
+                return res.status(500).json({ message: 'Error approving user' });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ message: 'User not found' });
+            }
+            res.json({ message: 'User approved successfully' });
+        });
+    } catch (error) {
+        console.error('Approve user error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 const PORT = process.env.PORT || 5001;
 
 // Export for Vercel serverless
