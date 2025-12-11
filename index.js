@@ -199,10 +199,117 @@ app.put('/api/parcels/:id/delivery', auth, (req, res) => {
     });
 });
 
-// Simplified endpoints for missing functionality
-app.get('/api/users', auth, (req, res) => res.json([]));
-app.get('/api/vendor-report', auth, (req, res) => res.json([]));
-app.get('/api/rider-reports', auth, (req, res) => res.json([]));
+// Get users (admin only)
+app.get('/api/users', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    db.query('SELECT id, name, email, role, is_approved, created_at FROM users', (err, results) => {
+        if (err) {
+            console.error('Fetch users error:', err);
+            return res.status(500).json({ message: 'Error fetching users' });
+        }
+        res.json(results);
+    });
+});
+
+// Vendor report
+app.get('/api/vendor-report', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    const query = `
+        SELECT 
+            DATE(p.created_at) as date,
+            u.name as vendor_name,
+            COUNT(p.id) as total_parcels,
+            SUM(COALESCE(p.cod_amount, 0)) as total_cod
+        FROM parcels p
+        JOIN users u ON p.vendor_id = u.id
+        WHERE u.role = 'vendor'
+        GROUP BY DATE(p.created_at), u.id, u.name
+        ORDER BY DATE(p.created_at) DESC, u.name
+    `;
+    
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error('Vendor report error:', err);
+            return res.status(500).json({ message: 'Error fetching vendor report' });
+        }
+        res.json(results);
+    });
+});
+
+// Rider reports
+app.get('/api/rider-reports', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    const query = `
+        SELECT 
+            u.id,
+            u.name as rider_name,
+            u.email,
+            u.created_at,
+            '' as citizenship_no,
+            '' as bike_no,
+            '' as license_no,
+            '' as photo_url,
+            0 as total_km,
+            COUNT(p.id) as total_parcels_delivered,
+            0 as working_days
+        FROM users u
+        LEFT JOIN parcels p ON u.id = p.assigned_rider_id AND p.status = 'delivered'
+        WHERE u.role = 'rider'
+        GROUP BY u.id, u.name, u.email, u.created_at
+        ORDER BY u.name
+    `;
+    
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error('Fetch rider reports error:', err);
+            return res.status(500).json({ message: 'Error fetching rider reports' });
+        }
+        res.json(results);
+    });
+});
+
+// Delete user
+app.delete('/api/users/:id', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    db.query('DELETE FROM users WHERE id = ? AND role IN ("vendor", "rider")', [req.params.id], (err, result) => {
+        if (err) {
+            console.error('Delete user error:', err);
+            return res.status(500).json({ message: 'Error deleting user' });
+        }
+        res.json({ message: 'User deleted successfully' });
+    });
+});
+
+// Approve user
+app.put('/api/users/:id/approve', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    db.query('UPDATE users SET is_approved = 1 WHERE id = ? AND role IN ("vendor", "rider")', [req.params.id], (err, result) => {
+        if (err) {
+            console.error('Approve user error:', err);
+            return res.status(500).json({ message: 'Error approving user' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json({ message: 'User approved successfully' });
+    });
+});
+
 app.get('/api/rider-daybook-details/:riderId', auth, (req, res) => res.json([]));
 
 module.exports = app;
