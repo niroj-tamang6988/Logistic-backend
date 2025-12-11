@@ -43,6 +43,16 @@ app.get('/api/debug/parcels-structure', (req, res) => {
     });
 });
 
+// Test endpoint
+app.get('/api/test', (req, res) => {
+    db.query('SELECT COUNT(*) as count FROM parcels', (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err.message, details: 'Database query failed' });
+        }
+        res.json({ message: 'Database working', parcel_count: results[0].count });
+    });
+});
+
 // Database connection
 const db = mysql.createConnection({
     host: process.env.DB_HOST,
@@ -50,6 +60,15 @@ const db = mysql.createConnection({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     port: process.env.DB_PORT || 3306
+});
+
+// Test database connection
+db.connect((err) => {
+    if (err) {
+        console.error('Database connection failed:', err);
+    } else {
+        console.log('Database connected successfully');
+    }
 });
 
 // Auth middleware
@@ -462,7 +481,7 @@ app.post('/api/parcels', auth, (req, res) => {
         const { recipient_name, recipient_address, recipient_phone, cod_amount } = req.body;
         
         db.query('INSERT INTO parcels (vendor_id, recipent_name, address, recipent_phone, cod_amound, status) VALUES (?, ?, ?, ?, ?, ?)',
-            [req.user.id, recipient_name, recipient_address, recipient_phone, cod_amount || 0, 'pending'], (err, result) => {
+            [req.user.id, recipient_name, recipient_address, recipient_phone, cod_amount || 0, 'placed'], (err, result) => {
             if (err) {
                 console.error('Create parcel error:', err);
                 return res.status(500).json({ message: 'Error creating parcel' });
