@@ -170,6 +170,35 @@ app.put('/api/parcels/:id/assign', auth, (req, res) => {
     });
 });
 
+// Update delivery status
+app.put('/api/parcels/:id/delivery', auth, (req, res) => {
+    const { status, delivery_comment } = req.body;
+    const validStatuses = ['delivered', 'not_delivered', 'assigned'];
+    
+    if (!validStatuses.includes(status)) {
+        return res.status(400).json({ message: 'Invalid status' });
+    }
+    
+    let query = 'UPDATE parcels SET status = ?, rider_comment = ? WHERE id = ?';
+    let params = [status, delivery_comment || null, req.params.id];
+    
+    if (req.user.role === 'rider') {
+        query = 'UPDATE parcels SET status = ?, rider_comment = ? WHERE id = ? AND assigned_rider_id = ?';
+        params = [status, delivery_comment || null, req.params.id, req.user.id];
+    }
+    
+    db.query(query, params, (err, result) => {
+        if (err) {
+            console.error('Update delivery error:', err);
+            return res.status(500).json({ message: 'Error updating delivery status' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(403).json({ message: 'Not authorized to update this parcel' });
+        }
+        res.json({ message: 'Delivery status updated successfully' });
+    });
+});
+
 // Simplified endpoints for missing functionality
 app.get('/api/users', auth, (req, res) => res.json([]));
 app.get('/api/vendor-report', auth, (req, res) => res.json([]));
