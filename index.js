@@ -98,14 +98,14 @@ app.post('/api/login', (req, res) => {
 // Get parcels
 app.get('/api/parcels', auth, (req, res) => {
     try {
-        let query = 'SELECT p.*, u.name as vendor_name, r.name as rider_name FROM parcels p LEFT JOIN users u ON p.vendor_id = u.id LEFT JOIN users r ON p.assign_rider_id = r.id';
+        let query = 'SELECT p.*, u.name as vendor_name, r.name as rider_name FROM parcels p LEFT JOIN users u ON p.vendor_id = u.id LEFT JOIN users r ON p.assigned_rider_id = r.id';
         let params = [];
         
         if (req.user.role === 'vendor') {
             query += ' WHERE p.vendor_id = ?';
             params = [req.user.id];
         } else if (req.user.role === 'rider') {
-            query += ' WHERE p.assign_rider_id = ?';
+            query += ' WHERE p.assigned_rider_id = ?';
             params = [req.user.id];
         }
         
@@ -142,7 +142,7 @@ app.get('/api/riders', auth, (req, res) => {
 // Get stats
 app.get('/api/stats', auth, (req, res) => {
     try {
-        let query = 'SELECT _status as status, COUNT(*) as count FROM parcels';
+        let query = 'SELECT status, COUNT(*) as count FROM parcels';
         let params = [];
         
         if (req.user.role === 'vendor') {
@@ -150,7 +150,7 @@ app.get('/api/stats', auth, (req, res) => {
             params = [req.user.id];
         }
         
-        query += ' GROUP BY _status';
+        query += ' GROUP BY status';
         
         db.query(query, params, (err, results) => {
             if (err) {
@@ -329,12 +329,19 @@ app.put('/api/parcels/:id/assign', auth, (req, res) => {
     try {
         const { rider_id } = req.body;
         
-        db.query('UPDATE parcels SET assign_rider_id = ?, _status = "assigned" WHERE id = ?',
+        db.query('UPDATE parcels SET assigned_rider_id = ?, status = "assigned" WHERE id = ?',
             [rider_id, req.params.id], (err, result) => {
             if (err) {
                 console.error('Assign parcel error:', err);
                 return res.status(500).json({ message: 'Error assigning parcel' });
             }
+            
+            // Log the assignment action
+            db.query('INSERT INTO parcel_logs (parcel_id, by_user, action, comment) VALUES (?, ?, ?, ?)',
+                [req.params.id, req.user.id, 'assigned', `Parcel assigned to rider ID: ${rider_id}`], (logErr) => {
+                if (logErr) console.error('Log assignment error:', logErr);
+            });
+            
             res.json({ message: 'Parcel assigned successfully' });
         });
     } catch (error) {
@@ -353,11 +360,11 @@ app.put('/api/parcels/:id/delivery', auth, (req, res) => {
             return res.status(400).json({ message: 'Invalid status value' });
         }
         
-        let query = 'UPDATE parcels SET _status = ?, rider_comment = ? WHERE id = ?';
+        let query = 'UPDATE parcels SET status = ?, rider_comment = ? WHERE id = ?';
         let params = [status, delivery_comment || null, req.params.id];
         
         if (req.user.role === 'rider') {
-            query = 'UPDATE parcels SET _status = ?, rider_comment = ? WHERE id = ? AND assign_rider_id = ?';
+            query = 'UPDATE parcels SET status = ?, rider_comment = ? WHERE id = ? AND assigned_rider_id = ?';
             params = [status, delivery_comment || null, req.params.id, req.user.id];
         }
         
@@ -369,6 +376,13 @@ app.put('/api/parcels/:id/delivery', auth, (req, res) => {
             if (result.affectedRows === 0) {
                 return res.status(403).json({ message: 'Not authorized to update this parcel' });
             }
+            
+            // Log the delivery status update
+            db.query('INSERT INTO parcel_logs (parcel_id, by_user, action, comment) VALUES (?, ?, ?, ?)',
+                [req.params.id, req.user.id, status, delivery_comment || `Status updated to ${status}`], (logErr) => {
+                if (logErr) console.error('Log delivery error:', logErr);
+            });
+            
             res.json({ message: 'Delivery status updated successfully' });
         });
     } catch (error) {
