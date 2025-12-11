@@ -222,15 +222,15 @@ app.get('/api/vendor-report', auth, (req, res) => {
     
     const query = `
         SELECT 
-            COALESCE(p.created_at, CURDATE()) as date,
+            CURDATE() as date,
             u.name as vendor_name,
             COUNT(p.id) as total_parcels,
             SUM(COALESCE(p.cod_amount, 0)) as total_cod
         FROM parcels p
         JOIN users u ON p.vendor_id = u.id
         WHERE u.role = 'vendor'
-        GROUP BY COALESCE(p.created_at, CURDATE()), u.id, u.name
-        ORDER BY COALESCE(p.created_at, CURDATE()) DESC, u.name
+        GROUP BY u.id, u.name
+        ORDER BY u.name
     `;
     
     db.query(query, (err, results) => {
