@@ -451,6 +451,47 @@ app.post('/api/rider-profile', auth, (req, res) => {
     }
 });
 
+// Create parcel endpoint
+app.post('/api/parcels', auth, (req, res) => {
+    try {
+        const { recipient_name, recipient_address, recipient_phone, cod_amount } = req.body;
+        
+        db.query('INSERT INTO parcels (vendor_id, recipent_name, address, recipent_phone, cod_amound, status) VALUES (?, ?, ?, ?, ?, ?)',
+            [req.user.id, recipient_name, recipient_address, recipient_phone, cod_amount || 0, 'pending'], (err, result) => {
+            if (err) {
+                console.error('Create parcel error:', err);
+                return res.status(500).json({ message: 'Error creating parcel' });
+            }
+            res.json({ message: 'Parcel placed successfully', id: result.insertId });
+        });
+    } catch (error) {
+        console.error('Create parcel error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Register endpoint
+app.post('/api/register', async (req, res) => {
+    try {
+        const { name, email, password, role } = req.body;
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const isApproved = role === 'admin' ? true : false;
+        
+        db.query('INSERT INTO users (name, email, password, role, is_approved) VALUES (?, ?, ?, ?, ?)', 
+            [name, email, hashedPassword, role, isApproved], (err, result) => {
+            if (err) {
+                console.error('Register error:', err);
+                return res.status(400).json({ message: 'Email already exists' });
+            }
+            const message = role === 'admin' ? 'Admin registered successfully' : 'Registration successful. Please wait for admin approval to login.';
+            res.json({ message });
+        });
+    } catch (error) {
+        console.error('Register error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 const PORT = process.env.PORT || 5001;
 
 // Export for Vercel serverless
