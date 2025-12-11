@@ -98,7 +98,12 @@ app.post('/api/login', (req, res) => {
 // Get parcels
 app.get('/api/parcels', auth, (req, res) => {
     try {
-        let query = 'SELECT p.*, u.name as vendor_name, r.name as rider_name FROM parcels p LEFT JOIN users u ON p.vendor_id = u.id LEFT JOIN users r ON p.assigned_rider_id = r.id';
+        let query = `SELECT p.id, p.vendor_id, p.recipent_name as recipient_name, p.address, p.recipent_phone as recipient_phone, 
+                     p.cod_amound as cod_amount, p.status, p.assigned_rider_id, p.rider_comment, p.created_at,
+                     u.name as vendor_name, r.name as rider_name 
+                     FROM parcels p 
+                     LEFT JOIN users u ON p.vendor_id = u.id 
+                     LEFT JOIN users r ON p.assigned_rider_id = r.id`;
         let params = [];
         
         if (req.user.role === 'vendor') {
@@ -192,7 +197,7 @@ app.get('/api/financial-report', auth, (req, res) => {
             SELECT 
                 status,
                 COUNT(*) as count,
-                SUM(COALESCE(cod_amount, 0)) as total_cod
+                SUM(COALESCE(cod_amound, 0)) as total_cod
             FROM parcels 
         `;
         let params = [];
@@ -225,7 +230,7 @@ app.get('/api/financial-report-daily', auth, (req, res) => {
                 DATE(created_at) as date,
                 status,
                 COUNT(*) as count,
-                SUM(COALESCE(cod_amount, 0)) as total_cod
+                SUM(COALESCE(cod_amound, 0)) as total_cod
             FROM parcels 
         `;
         let params = [];
@@ -262,7 +267,7 @@ app.get('/api/vendor-report', auth, (req, res) => {
                 DATE(p.created_at) as date,
                 u.name as vendor_name,
                 COUNT(p.id) as total_parcels,
-                SUM(COALESCE(p.cod_amount, 0)) as total_cod
+                SUM(COALESCE(p.cod_amound, 0)) as total_cod
             FROM parcels p
             JOIN users u ON p.vendor_id = u.id
             WHERE u.role = 'vendor'
@@ -531,6 +536,38 @@ app.put('/api/users/:id/approve', auth, (req, res) => {
         });
     } catch (error) {
         console.error('Approve user error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Rider daybook details
+app.get('/api/rider-daybook-details/:riderId', auth, (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        const query = `
+            SELECT 
+                date,
+                total_km,
+                parcels_delivered,
+                fuel_cost,
+                notes
+            FROM rider_daybook 
+            WHERE rider_id = ?
+            ORDER BY date DESC
+        `;
+        
+        db.query(query, [req.params.riderId], (err, results) => {
+            if (err) {
+                console.error('Fetch rider daybook details error:', err);
+                return res.status(500).json({ message: 'Error fetching rider daybook details' });
+            }
+            res.json(results);
+        });
+    } catch (error) {
+        console.error('Fetch rider daybook details error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });
