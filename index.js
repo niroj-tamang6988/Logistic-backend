@@ -314,6 +314,59 @@ app.get('/api/rider-reports', auth, (req, res) => {
     }
 });
 
+// Assign rider to parcel
+app.put('/api/parcels/:id/assign', auth, (req, res) => {
+    try {
+        const { rider_id } = req.body;
+        
+        db.query('UPDATE parcels SET assigned_rider_id = ?, status = "assigned" WHERE id = ?',
+            [rider_id, req.params.id], (err, result) => {
+            if (err) {
+                console.error('Assign parcel error:', err);
+                return res.status(500).json({ message: 'Error assigning parcel' });
+            }
+            res.json({ message: 'Parcel assigned successfully' });
+        });
+    } catch (error) {
+        console.error('Assign parcel error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Update delivery status
+app.put('/api/parcels/:id/delivery', auth, (req, res) => {
+    try {
+        const { status, delivery_comment } = req.body;
+        
+        const validStatuses = ['delivered', 'not_delivered', 'assigned', 'pending'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ message: 'Invalid status value' });
+        }
+        
+        let query = 'UPDATE parcels SET status = ?, rider_comment = ? WHERE id = ?';
+        let params = [status, delivery_comment || null, req.params.id];
+        
+        if (req.user.role === 'rider') {
+            query = 'UPDATE parcels SET status = ?, rider_comment = ? WHERE id = ? AND assigned_rider_id = ?';
+            params = [status, delivery_comment || null, req.params.id, req.user.id];
+        }
+        
+        db.query(query, params, (err, result) => {
+            if (err) {
+                console.error('Update delivery error:', err);
+                return res.status(500).json({ message: 'Error updating delivery status' });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(403).json({ message: 'Not authorized to update this parcel' });
+            }
+            res.json({ message: 'Delivery status updated successfully' });
+        });
+    } catch (error) {
+        console.error('Update delivery error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 const PORT = process.env.PORT || 5001;
 
 // Export for Vercel serverless
