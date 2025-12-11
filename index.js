@@ -367,6 +367,66 @@ app.put('/api/parcels/:id/delivery', auth, (req, res) => {
     }
 });
 
+// Rider profile endpoints
+app.get('/api/rider-profile', auth, (req, res) => {
+    try {
+        if (req.user.role !== 'rider') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        db.query('SELECT * FROM rider_profiles WHERE user_id = ?', [req.user.id], (err, results) => {
+            if (err) {
+                console.error('Fetch rider profile error:', err);
+                return res.status(500).json({ message: 'Error fetching rider profile' });
+            }
+            res.json(results[0] || {});
+        });
+    } catch (error) {
+        console.error('Fetch rider profile error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.post('/api/rider-profile', auth, (req, res) => {
+    try {
+        if (req.user.role !== 'rider') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        const { citizenship_no, bike_no, license_no, photo_url } = req.body;
+        
+        db.query('SELECT id FROM rider_profiles WHERE user_id = ?', [req.user.id], (err, results) => {
+            if (err) {
+                console.error('Check rider profile error:', err);
+                return res.status(500).json({ message: 'Error checking rider profile' });
+            }
+            
+            if (results.length > 0) {
+                db.query('UPDATE rider_profiles SET citizenship_no = ?, bike_no = ?, license_no = ?, photo_url = ? WHERE user_id = ?',
+                    [citizenship_no, bike_no, license_no, photo_url, req.user.id], (err, result) => {
+                    if (err) {
+                        console.error('Update rider profile error:', err);
+                        return res.status(500).json({ message: 'Error updating rider profile' });
+                    }
+                    res.json({ message: 'Rider profile updated successfully' });
+                });
+            } else {
+                db.query('INSERT INTO rider_profiles (user_id, citizenship_no, bike_no, license_no, photo_url) VALUES (?, ?, ?, ?, ?)',
+                    [req.user.id, citizenship_no, bike_no, license_no, photo_url], (err, result) => {
+                    if (err) {
+                        console.error('Create rider profile error:', err);
+                        return res.status(500).json({ message: 'Error creating rider profile' });
+                    }
+                    res.json({ message: 'Rider profile created successfully' });
+                });
+            }
+        });
+    } catch (error) {
+        console.error('Rider profile error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 const PORT = process.env.PORT || 5001;
 
 // Export for Vercel serverless
