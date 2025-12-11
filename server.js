@@ -168,8 +168,8 @@ app.post('/api/parcels', auth, (req, res) => {
         const { recipient_name, recipient_address, recipient_phone, cod_amount } = req.body;
         console.log('Creating parcel with data:', { recipient_name, recipient_address, recipient_phone, cod_amount, vendor_id: req.user.id });
         
-        db.query('INSERT INTO parcels (vendor_id, recipient_name, address, recipient_phone, cod_amount) VALUES (?, ?, ?, ?, ?)',
-            [req.user.id, recipient_name, recipient_address, recipient_phone, cod_amount || 0], (err, result) => {
+        db.query('INSERT INTO parcels (vendor_id, recipient_name, address, recipient_phone, cod_amount, status) VALUES (?, ?, ?, ?, ?, ?)',
+            [req.user.id, recipient_name, recipient_address, recipient_phone, cod_amount || 0, 'pending'], (err, result) => {
             if (err) {
                 console.error('Create parcel error:', err);
                 return res.status(500).json({ message: 'Database error: ' + err.message });
@@ -212,18 +212,23 @@ app.get('/api/parcels', auth, (req, res) => {
 app.put('/api/parcels/:id/assign', auth, (req, res) => {
     try {
         const { rider_id } = req.body;
+        console.log('Assigning parcel:', { parcel_id: req.params.id, rider_id, admin_id: req.user.id });
         
         db.query('UPDATE parcels SET assigned_rider_id = ?, status = "assigned" WHERE id = ?',
             [rider_id, req.params.id], (err, result) => {
             if (err) {
                 console.error('Assign parcel error:', err);
-                return res.status(500).json({ message: 'Error assigning parcel' });
+                return res.status(500).json({ message: 'Database error: ' + err.message });
+            }
+            console.log('Assignment result:', result);
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ message: 'Parcel not found' });
             }
             res.json({ message: 'Parcel assigned successfully' });
         });
     } catch (error) {
         console.error('Assign parcel error:', error);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: 'Server error: ' + error.message });
     }
 });
 
