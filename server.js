@@ -166,18 +166,20 @@ app.post('/api/login', (req, res) => {
 app.post('/api/parcels', auth, (req, res) => {
     try {
         const { recipient_name, recipient_address, recipient_phone, cod_amount } = req.body;
+        console.log('Creating parcel with data:', { recipient_name, recipient_address, recipient_phone, cod_amount, vendor_id: req.user.id });
         
         db.query('INSERT INTO parcels (vendor_id, recipient_name, address, recipient_phone, cod_amount) VALUES (?, ?, ?, ?, ?)',
             [req.user.id, recipient_name, recipient_address, recipient_phone, cod_amount || 0], (err, result) => {
             if (err) {
                 console.error('Create parcel error:', err);
-                return res.status(500).json({ message: 'Error creating parcel' });
+                return res.status(500).json({ message: 'Database error: ' + err.message });
             }
+            console.log('Parcel created successfully:', result);
             res.json({ message: 'Parcel placed successfully', id: result.insertId });
         });
     } catch (error) {
-        console.error('Create parcel error:', error);
-        res.status(500).json({ message: 'Server error' });
+        console.error('Create parcel catch error:', error);
+        res.status(500).json({ message: 'Server error: ' + error.message });
     }
 });
 
