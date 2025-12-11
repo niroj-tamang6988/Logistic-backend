@@ -2,58 +2,44 @@ const express = require('express');
 const mysql = require('mysql2');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
 
-app.use(cors({
-    origin: ['http://localhost:3000', 'https://logistic-green-six.vercel.app'],
-    credentials: true
-}));
+// CORS middleware - must be first
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+    next();
+});
+
 app.use(express.json());
 
-// Health check routes
+// Health check route
 app.get('/', (req, res) => {
-    res.json({ message: 'Delivery Management System API', status: 'OK' });
+    res.json({ message: 'Delivery Management System API is running', status: 'OK' });
 });
 
 app.get('/api/health', (req, res) => {
     res.json({ message: 'API is healthy', timestamp: new Date().toISOString() });
 });
 
-// Debug endpoint to check database
-app.get('/api/debug/users', (req, res) => {
-    db.query('SELECT id, name, email, role FROM users', (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json({ users: results, count: results.length });
-    });
-});
-
-// Debug endpoint to check specific user
-app.get('/api/debug/user/:email', (req, res) => {
-    const email = req.params.email;
-    db.query('SELECT id, name, email, role FROM users WHERE email = ?', [email], (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json({ found: results.length > 0, user: results[0] || null });
-    });
-});
-
-// Database connection pool for serverless
-const db = mysql.createPool({
+// Database connection
+const db = mysql.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    port: process.env.DB_PORT || 3306,
-    connectionLimit: 10,
-    acquireTimeout: 60000,
-    timeout: 60000,
-    reconnect: true
+    port: process.env.DB_PORT || 3306
 });
 
 // Auth middleware
@@ -70,62 +56,21 @@ const auth = (req, res, next) => {
     }
 };
 
-// Register route
-app.post('/api/register', async (req, res) => {
-    try {
-        const { name, email, password, role } = req.body;
-        console.log('Register attempt:', { name, email, role });
-        
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const isApproved = role === 'admin' ? true : false;
-        
-        db.query('INSERT INTO users (name, email, password, role, is_approved) VALUES (?, ?, ?, ?, ?)', 
-            [name, email, hashedPassword, role, isApproved], (err, result) => {
-            if (err) {
-                console.error('Register error:', err);
-                if (err.code === 'ER_DUP_ENTRY') {
-                    return res.status(400).json({ message: 'Email already exists' });
-                }
-                return res.status(500).json({ message: 'Server error' });
-            }
-            const message = role === 'admin' ? 'Admin registered successfully' : 'Registration successful. Please wait for admin approval to login.';
-            res.json({ message });
-        });
-    } catch (error) {
-        console.error('Register error:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
 // Login route
 app.post('/api/login', (req, res) => {
     try {
         const { email, password } = req.body;
-        console.log('Login attempt:', { email, passwordLength: password?.length });
         
         db.query('SELECT * FROM users WHERE email = ?', [email], async (err, results) => {
             if (err) {
                 console.error('Login query error:', err);
                 return res.status(500).json({ message: 'Server error' });
             }
-            
-            console.log('Query results:', { count: results.length, email });
-            
-            if (results.length === 0) {
-                return res.status(400).json({ 
-                    message: 'User not found',
-                    debug: { searchedEmail: email, emailLength: email?.length }
-                });
-            }
+            if (results.length === 0) return res.status(400).json({ message: 'User is not registered. Please register first.' });
             
             const user = results[0];
-            console.log('User found:', { id: user.id, email: user.email, role: user.role });
-            
             const isMatch = await bcrypt.compare(password, user.password);
-            console.log('Password match:', isMatch);
-            
-            if (!isMatch) return res.status(400).json({ message: 'Invalid password' });
+            if (!isMatch) return res.status(400).json({ message: 'Invalid password. Please check your password.' });
             
             if (!user.is_approved && user.role !== 'admin') {
                 return res.status(403).json({ message: 'Account pending admin approval' });
@@ -167,14 +112,57 @@ app.get('/api/parcels', auth, (req, res) => {
     }
 });
 
-// User management routes for admin
+// Get riders
+app.get('/api/riders', auth, (req, res) => {
+    try {
+        const query = 'SELECT id, name FROM users WHERE role = "rider" AND is_approved = 1';
+        db.query(query, (err, results) => {
+            if (err) {
+                console.error('Fetch riders error:', err);
+                return res.status(500).json({ message: 'Error fetching riders' });
+            }
+            res.json(results);
+        });
+    } catch (error) {
+        console.error('Fetch riders error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Get stats
+app.get('/api/stats', auth, (req, res) => {
+    try {
+        let query = 'SELECT status, COUNT(*) as count FROM parcels';
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = ?';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY status';
+        
+        db.query(query, params, (err, results) => {
+            if (err) {
+                console.error('Fetch stats error:', err);
+                return res.status(500).json({ message: 'Error fetching stats' });
+            }
+            res.json(results);
+        });
+    } catch (error) {
+        console.error('Fetch stats error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Get users (admin only)
 app.get('/api/users', auth, (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Access denied' });
         }
         
-        db.query('SELECT id, name, email, role, is_approved, created_at FROM users ORDER BY created_at DESC', (err, results) => {
+        db.query('SELECT id, name, email, role, is_approved, created_at FROM users', (err, results) => {
             if (err) {
                 console.error('Fetch users error:', err);
                 return res.status(500).json({ message: 'Error fetching users' });
@@ -187,45 +175,146 @@ app.get('/api/users', auth, (req, res) => {
     }
 });
 
-app.put('/api/users/:id/approve', auth, (req, res) => {
+// Financial reports
+app.get('/api/financial-report', auth, (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                status,
+                COUNT(*) as count,
+                SUM(COALESCE(cod_amount, 0)) as total_cod
+            FROM parcels 
+        `;
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = ?';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY status';
+        
+        db.query(query, params, (err, results) => {
+            if (err) {
+                console.error('Financial report error:', err);
+                return res.status(500).json({ message: 'Error fetching financial report' });
+            }
+            res.json(results);
+        });
+    } catch (error) {
+        console.error('Financial report error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Daily financial reports
+app.get('/api/financial-report-daily', auth, (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                DATE(created_at) as date,
+                status,
+                COUNT(*) as count,
+                SUM(COALESCE(cod_amount, 0)) as total_cod
+            FROM parcels 
+        `;
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = ?';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY DATE(created_at), status ORDER BY date DESC, status';
+        
+        db.query(query, params, (err, results) => {
+            if (err) {
+                console.error('Daily financial report error:', err);
+                return res.status(500).json({ message: 'Error fetching daily financial report' });
+            }
+            res.json(results);
+        });
+    } catch (error) {
+        console.error('Daily financial report error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Vendor report
+app.get('/api/vendor-report', auth, (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Access denied' });
         }
         
-        db.query('UPDATE users SET is_approved = 1 WHERE id = ? AND role IN ("vendor", "rider")', [req.params.id], (err, result) => {
+        const query = `
+            SELECT 
+                DATE(p.created_at) as date,
+                u.name as vendor_name,
+                COUNT(p.id) as total_parcels,
+                SUM(COALESCE(p.cod_amount, 0)) as total_cod
+            FROM parcels p
+            JOIN users u ON p.vendor_id = u.id
+            WHERE u.role = 'vendor'
+            GROUP BY DATE(p.created_at), u.id, u.name
+            ORDER BY DATE(p.created_at) DESC, u.name
+        `;
+        
+        db.query(query, (err, results) => {
             if (err) {
-                console.error('Approve user error:', err);
-                return res.status(500).json({ message: 'Error approving user: ' + err.message });
+                console.error('Vendor report error:', err);
+                return res.status(500).json({ message: 'Error fetching vendor report' });
             }
-            if (result.affectedRows === 0) {
-                return res.status(404).json({ message: 'User not found or not eligible for approval' });
-            }
-            res.json({ message: 'User approved successfully' });
+            res.json(results);
         });
     } catch (error) {
-        console.error('Approve user error:', error);
+        console.error('Vendor report error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });
 
-app.delete('/api/users/:id', auth, (req, res) => {
+// Rider reports
+app.get('/api/rider-reports', auth, (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Access denied' });
         }
         
-        db.query('DELETE FROM users WHERE id = ? AND role IN ("vendor", "rider")', [req.params.id], (err, result) => {
+        const query = `
+            SELECT 
+                u.id,
+                u.name as rider_name,
+                u.email,
+                u.created_at,
+                rp.citizenship_no,
+                rp.bike_no,
+                rp.license_no,
+                rp.photo_url,
+                COALESCE(SUM(rd.total_km), 0) as total_km,
+                COALESCE(SUM(rd.parcels_delivered), 0) as total_parcels_delivered,
+                COUNT(rd.id) as working_days
+            FROM users u
+            LEFT JOIN rider_profiles rp ON u.id = rp.user_id
+            LEFT JOIN rider_daybook rd ON u.id = rd.rider_id
+            WHERE u.role = 'rider'
+            GROUP BY u.id, u.name, u.email, u.created_at, rp.citizenship_no, rp.bike_no, rp.license_no, rp.photo_url
+            ORDER BY total_km DESC
+        `;
+        
+        db.query(query, (err, results) => {
             if (err) {
-                console.error('Delete user error:', err);
-                return res.status(500).json({ message: 'Error deleting user' });
+                console.error('Fetch rider reports error:', err);
+                return res.status(500).json({ message: 'Error fetching rider reports' });
             }
-            res.json({ message: 'User deleted successfully' });
+            res.json(results);
         });
     } catch (error) {
-        console.error('Delete user error:', error);
+        console.error('Fetch rider reports error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });
 
+const PORT = process.env.PORT || 5001;
+
+// Export for Vercel serverless
 module.exports = app;
