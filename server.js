@@ -26,6 +26,27 @@ app.get('/api/health', (req, res) => {
     res.json({ message: 'API is healthy', timestamp: new Date().toISOString() });
 });
 
+// Migration endpoint to fix existing parcel statuses
+app.post('/api/migrate-parcels', auth, (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        // Update parcels with 'placed' status to 'pending'
+        db.query('UPDATE parcels SET status = "pending" WHERE status = "placed" OR status IS NULL', (err, result) => {
+            if (err) {
+                console.error('Migration error:', err);
+                return res.status(500).json({ message: 'Migration failed' });
+            }
+            res.json({ message: `Migration completed. Updated ${result.affectedRows} parcels.` });
+        });
+    } catch (error) {
+        console.error('Migration error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // Create uploads directory if it doesn't exist (skip in serverless)
 if (process.env.NODE_ENV !== 'production') {
     if (!fs.existsSync('uploads')) {
