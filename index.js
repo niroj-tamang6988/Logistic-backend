@@ -62,13 +62,7 @@ app.post('/api/login', (req, res) => {
 
 // Get parcels
 app.get('/api/parcels', auth, (req, res) => {
-    let query = `SELECT p.id, p.vendor_id, p.recipent_name as recipient_name, p.address, 
-                 p.recipent_phone as recipient_phone, p.cod_amound as cod_amount, p.status, 
-                 p.assigned_rider_id, p.rider_comment, p.created_at,
-                 u.name as vendor_name, r.name as rider_name 
-                 FROM parcels p 
-                 LEFT JOIN users u ON p.vendor_id = u.id 
-                 LEFT JOIN users r ON p.assigned_rider_id = r.id`;
+    let query = 'SELECT p.*, u.name as vendor_name, r.name as rider_name FROM parcels p LEFT JOIN users u ON p.vendor_id = u.id LEFT JOIN users r ON p.assigned_rider_id = r.id';
     let params = [];
     
     if (req.user.role === 'vendor') {
@@ -88,8 +82,8 @@ app.get('/api/parcels', auth, (req, res) => {
 // Create parcel
 app.post('/api/parcels', auth, (req, res) => {
     const { recipient_name, recipient_address, recipient_phone, cod_amount } = req.body;
-    db.query('INSERT INTO parcels (vendor_id, recipent_name, address, recipent_phone, cod_amound, status) VALUES (?, ?, ?, ?, ?, ?)',
-        [req.user.id, recipient_name, recipient_address, recipient_phone, cod_amount || 0, 'placed'], (err, result) => {
+    db.query('INSERT INTO parcels (vendor_id, recipient_name, address, recipient_phone, cod_amount, status) VALUES (?, ?, ?, ?, ?, ?)',
+        [req.user.id, recipient_name, recipient_address, recipient_phone, cod_amount || 0, 'pending'], (err, result) => {
         if (err) {
             console.error('Create parcel error:', err);
             return res.status(500).json({ message: 'Error creating parcel' });
@@ -126,7 +120,7 @@ app.get('/api/stats', auth, (req, res) => {
 
 // Financial reports
 app.get('/api/financial-report', auth, (req, res) => {
-    let query = 'SELECT status, COUNT(*) as count, SUM(COALESCE(cod_amound, 0)) as total_cod FROM parcels';
+    let query = 'SELECT status, COUNT(*) as count, SUM(COALESCE(cod_amount, 0)) as total_cod FROM parcels';
     let params = [];
     
     if (req.user.role === 'vendor') {
@@ -147,7 +141,7 @@ app.get('/api/financial-report', auth, (req, res) => {
 
 // Daily financial reports
 app.get('/api/financial-report-daily', auth, (req, res) => {
-    let query = 'SELECT DATE(created_at) as date, status, COUNT(*) as count, SUM(COALESCE(cod_amound, 0)) as total_cod FROM parcels';
+    let query = 'SELECT DATE(created_at) as date, status, COUNT(*) as count, SUM(COALESCE(cod_amount, 0)) as total_cod FROM parcels';
     let params = [];
     
     if (req.user.role === 'vendor') {
