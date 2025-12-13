@@ -44,6 +44,28 @@ app.get('/', (req, res) => {
     res.json({ message: 'API is running' });
 });
 
+// Register
+app.post('/api/register', async (req, res) => {
+    try {
+        const { name, email, password, role } = req.body;
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const isApproved = role === 'admin' ? true : false;
+        
+        db.query('INSERT INTO users (name, email, password, role, is_approved) VALUES (?, ?, ?, ?, ?)', 
+            [name, email, hashedPassword, role, isApproved], (err, result) => {
+            if (err) {
+                console.error('Register error:', err);
+                return res.status(400).json({ message: 'Email already exists' });
+            }
+            const message = role === 'admin' ? 'Admin registered successfully' : 'Registration successful. Please wait for admin approval to login.';
+            res.json({ message });
+        });
+    } catch (error) {
+        console.error('Register error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // Login
 app.post('/api/login', (req, res) => {
     const { email, password } = req.body;
@@ -54,6 +76,10 @@ app.post('/api/login', (req, res) => {
         const user = results[0];
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ message: 'Invalid password' });
+        
+        if (!user.is_approved && user.role !== 'admin') {
+            return res.status(403).json({ message: 'Account pending admin approval' });
+        }
         
         const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET);
         res.json({ token, user: { id: user.id, name: user.name, role: user.role } });
