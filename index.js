@@ -16,12 +16,10 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Database connection
+// Database connection - Using Supabase Session Pooler for IPv4 compatibility
 const db = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:NirojTamang@db.mydygbnplhusevdmuloe.supabase.co:5432/postgres',
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 10000,
-    idleTimeoutMillis: 30000
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres.mydygbnplhusevdmuloe:NirojTamang@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres',
+    ssl: { rejectUnauthorized: false }
 });
 
 // Auth middleware
