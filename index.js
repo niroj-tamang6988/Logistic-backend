@@ -89,7 +89,7 @@ app.get('/api/parcels', auth, (req, res) => {
     let params = [];
     
     if (req.user.role === 'vendor') {
-        query += ' WHERE p.vendor_id = ?';
+        query += ' WHERE p.vendor_id = $1';
         params = [req.user.id];
     }
     
@@ -386,6 +386,119 @@ app.put('/api/users/:id/approve', auth, (req, res) => {
             return res.status(500).json({ message: 'Error approving user' });
         }
         if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json({ message: 'User approved successfully' });
+    });
+});
+
+// Get users (admin only)
+app.get('/api/users', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    db.query('SELECT id, name, email, role, is_approved, created_at FROM users', (err, results) => {
+        if (err) {
+            console.error('Fetch users error:', err);
+            return res.status(500).json({ message: 'Error fetching users' });
+        }
+        res.json(results.rows);
+    });
+});
+
+// Vendor report
+app.get('/api/vendor-report', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    const query = `
+        SELECT 
+            CURRENT_DATE as date,
+            u.name as vendor_name,
+            COUNT(p.id) as total_parcels,
+            SUM(COALESCE(p.cod_amount, 0)) as total_cod
+        FROM parcels p
+        JOIN users u ON p.vendor_id = u.id
+        WHERE u.role = 'vendor'
+        GROUP BY u.id, u.name
+        ORDER BY u.name
+    `;
+    
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error('Vendor report error:', err);
+            return res.status(500).json({ message: 'Error fetching vendor report' });
+        }
+        res.json(results.rows);
+    });
+});
+
+// Rider reports
+app.get('/api/rider-reports', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    const query = `
+        SELECT 
+            u.id,
+            u.name as rider_name,
+            u.email,
+            u.created_at,
+            COALESCE(rp.citizenship_no, '') as citizenship_no,
+            COALESCE(rp.bike_no, '') as bike_no,
+            COALESCE(rp.license_no, '') as license_no,
+            COALESCE(rp.photo_url, '') as photo_url,
+            COALESCE(SUM(rd.total_km), 0) as total_km,
+            COUNT(p.id) as total_parcels_delivered,
+            COUNT(DISTINCT rd.date) as working_days
+        FROM users u
+        LEFT JOIN rider_profiles rp ON u.id = rp.rider_id
+        LEFT JOIN rider_daybook rd ON u.id = rd.rider_id
+        LEFT JOIN parcels p ON u.id = p.assigned_rider_id AND p.status = 'delivered'
+        WHERE u.role = 'rider'
+        GROUP BY u.id, u.name, u.email, u.created_at, rp.citizenship_no, rp.bike_no, rp.license_no, rp.photo_url
+        ORDER BY u.name
+    `;
+    
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error('Fetch rider reports error:', err);
+            return res.status(500).json({ message: 'Error fetching rider reports' });
+        }
+        res.json(results.rows);
+    });
+});
+
+// Delete user
+app.delete('/api/users/:id', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    db.query('DELETE FROM users WHERE id = $1 AND role IN ($2, $3)', [req.params.id, 'vendor', 'rider'], (err, result) => {
+        if (err) {
+            console.error('Delete user error:', err);
+            return res.status(500).json({ message: 'Error deleting user' });
+        }
+        res.json({ message: 'User deleted successfully' });
+    });
+});
+
+// Approve user
+app.put('/api/users/:id/approve', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    db.query('UPDATE users SET is_approved = $1 WHERE id = $2 AND role IN ($3, $4)', [true, req.params.id, 'vendor', 'rider'], (err, result) => {
+        if (err) {
+            console.error('Approve user error:', err);
+            return res.status(500).json({ message: 'Error approving user' });
+        }
+        if (result.rowCount === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
         res.json({ message: 'User approved successfully' });
