@@ -62,13 +62,23 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
+        
+        if (!email || !password) {
+            return res.status(400).json({ message: 'Email and password required' });
+        }
+        
         const results = await db.query('SELECT * FROM users WHERE email = $1', [email]);
         
-        if (results.rows.length === 0) return res.status(400).json({ message: 'User not found' });
+        if (results.rows.length === 0) {
+            return res.status(400).json({ message: 'User not found' });
+        }
         
         const user = results.rows[0];
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ message: 'Invalid password' });
+        
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Invalid password' });
+        }
         
         if (!user.is_approved && user.role !== 'admin') {
             return res.status(403).json({ message: 'Account pending admin approval' });
@@ -77,8 +87,8 @@ app.post('/api/login', async (req, res) => {
         const token = jwt.sign({ id: user.id, role: user.role }, 'logistic_delivery_management_system_secret_key_2024');
         res.json({ token, user: { id: user.id, name: user.name, role: user.role } });
     } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ message: 'Server error' });
+        console.error('Login error:', error.message);
+        res.status(500).json({ message: 'Server error: ' + error.message });
     }
 });
 
