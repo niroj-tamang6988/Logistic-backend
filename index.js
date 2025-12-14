@@ -16,9 +16,9 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Database connection - Supabase IPv4 Pooler
+// Database connection - Supabase Transaction Pooler
 const db = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://postgres.mydygbnplhusevdmuloe:NirojTamang@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres',
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:NirojTamang@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?pgbouncer=true&connection_limit=1',
     ssl: { rejectUnauthorized: false }
 });
 
