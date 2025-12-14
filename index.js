@@ -16,10 +16,10 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Database connection - Supabase with SSL
+// Database connection - Supabase IPv4 Pooler
 const db = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:NirojTamang@db.mydygbnplhusevdmuloe.supabase.co:5432/postgres?sslmode=require',
-    ssl: 'require'
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres.mydygbnplhusevdmuloe:NirojTamang@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres',
+    ssl: { rejectUnauthorized: false }
 });
 
 // Auth middleware
