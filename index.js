@@ -189,7 +189,7 @@ app.get('/api/users', auth, async (req, res) => {
             return res.status(403).json({ message: 'Access denied' });
         }
         
-        const results = await db.query('SELECT id, name, email, role, is_approved FROM users ORDER BY created_at DESC');
+        const results = await db.query('SELECT id, name, email, role, is_approved, created_at FROM users ORDER BY created_at DESC');
         res.json(results.rows);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching users' });
