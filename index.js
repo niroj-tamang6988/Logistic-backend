@@ -129,7 +129,7 @@ app.get('/api/stats', auth, (req, res) => {
     let params = [];
     
     if (req.user.role === 'vendor') {
-        query += ' WHERE vendor_id = ?';
+        query += ' WHERE vendor_id = $1';
         params = [req.user.id];
     }
     
@@ -147,7 +147,7 @@ app.get('/api/financial-report', auth, (req, res) => {
     let params = [];
     
     if (req.user.role === 'vendor') {
-        query += ' WHERE vendor_id = ?';
+        query += ' WHERE vendor_id = $1';
         params = [req.user.id];
     }
     
@@ -168,7 +168,7 @@ app.get('/api/financial-report-daily', auth, (req, res) => {
     let params = [];
     
     if (req.user.role === 'vendor') {
-        query += ' WHERE vendor_id = ?';
+        query += ' WHERE vendor_id = $1';
         params = [req.user.id];
     }
     
@@ -242,8 +242,27 @@ app.put('/api/parcels/:id/delivery', auth, (req, res) => {
         return res.status(400).json({ message: 'Invalid status' });
     }
     
-    let query = 'UPDATE parcels SET status = ?, rider_comment = ? WHERE id = ?';
+    let query = 'UPDATE parcels SET status = $1, rider_comment = $2 WHERE id = $3';
     let params = [status, delivery_comment || null, req.params.id];
+    
+    if (req.user.role === 'rider') {
+        query = 'UPDATE parcels SET status = $1, rider_comment = $2 WHERE id = $3 AND assigned_rider_id = $4';
+        params = [status, delivery_comment || null, req.params.id, req.user.id];
+    }
+    
+    db.query(query, params, (err, result) => {
+        if (err) {
+            console.error('Update delivery error:', err);
+            return res.status(500).json({ message: 'Error updating delivery status' });
+        }
+        if (result.rowCount === 0) {
+            return res.status(403).json({ message: 'Not authorized to update this parcel' });
+        }
+        res.json({ message: 'Delivery status updated successfully' });
+    });
+});
+
+module.exports = app;atus, delivery_comment || null, req.params.id];
     
     if (req.user.role === 'rider') {
         query = 'UPDATE parcels SET status = ?, rider_comment = ? WHERE id = ? AND assigned_rider_id = ?';
