@@ -16,9 +16,9 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Database connection - Direct Supabase PostgreSQL
+// Database connection - Neon PostgreSQL
 const db = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:NirojTamang@db.mydygbnplhusevdmuloe.supabase.co:5432/postgres',
+    connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_MiFC8yadsf2x@ep-empty-shape-ah6kyix1-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
     ssl: { rejectUnauthorized: false }
 });
 
