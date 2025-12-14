@@ -11,5 +11,9 @@
       "src": "/(.*)",
       "dest": "/index.js"
     }
-  ]
+  ],
+  "env": {
+    "DATABASE_URL": "postgresql://postgres:NirojTamang@db.mydygbnplhusevdmuloe.supabase.co:5432/postgres",
+    "JWT_SECRET": "logistic_delivery_management_system_secret_key_2024"
+  }
 }
