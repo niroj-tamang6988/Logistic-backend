@@ -19,9 +19,7 @@ app.use(express.json());
 // Database connection - Supabase with SSL
 const db = new Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://postgres:NirojTamang@db.mydygbnplhusevdmuloe.supabase.co:5432/postgres?sslmode=require',
-    ssl: {
-        rejectUnauthorized: false
-    }
+    ssl: 'require'
 });
 
 // Auth middleware
