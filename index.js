@@ -55,8 +55,8 @@ app.post('/api/register', async (req, res) => {
         const message = role === 'admin' ? 'Admin registered successfully' : 'Registration successful. Please wait for admin approval to login.';
         res.json({ message });
     } catch (error) {
-        console.error('Register error:', error);
-        res.status(400).json({ message: 'Email already exists' });
+        console.error('Register error:', error.message);
+        res.status(400).json({ message: 'Register error: ' + error.message });
     }
 });
 
@@ -69,7 +69,9 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ message: 'Email and password required' });
         }
         
+        console.log('Attempting login for:', email);
         const results = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+        console.log('Query result:', results.rows.length);
         
         if (results.rows.length === 0) {
             return res.status(400).json({ message: 'User not found' });
@@ -90,7 +92,7 @@ app.post('/api/login', async (req, res) => {
         res.json({ token, user: { id: user.id, name: user.name, role: user.role } });
     } catch (error) {
         console.error('Login error:', error.message);
-        res.status(500).json({ message: 'Server error: ' + error.message });
+        res.status(500).json({ message: 'Login error: ' + error.message });
     }
 });
 
