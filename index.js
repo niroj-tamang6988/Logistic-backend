@@ -162,6 +162,125 @@ app.put('/api/parcels/:id/delivery', auth, async (req, res) => {
     }
 });
 
+// Get stats
+app.get('/api/stats', auth, async (req, res) => {
+    try {
+        let query = 'SELECT status, COUNT(*) as count FROM parcels';
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY status';
+        
+        const results = await db.query(query, params);
+        res.json(results.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching stats' });
+    }
+});
+
+// Get users
+app.get('/api/users', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        const results = await db.query('SELECT id, name, email, role, is_approved FROM users ORDER BY created_at DESC');
+        res.json(results.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching users' });
+    }
+});
+
+// Financial reports
+app.get('/api/financial-report', auth, async (req, res) => {
+    try {
+        let query = 'SELECT status, COUNT(*) as count, SUM(COALESCE(cod_amount, 0)) as total_cod FROM parcels';
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY status';
+        
+        const results = await db.query(query, params);
+        res.json(results.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching financial report' });
+    }
+});
+
+// Daily financial reports
+app.get('/api/financial-report-daily', auth, async (req, res) => {
+    try {
+        let query = 'SELECT DATE(created_at) as date, status, COUNT(*) as count, SUM(COALESCE(cod_amount, 0)) as total_cod FROM parcels';
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY DATE(created_at), status ORDER BY date DESC';
+        
+        const results = await db.query(query, params);
+        res.json(results.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching daily financial report' });
+    }
+});
+
+// Vendor report
+app.get('/api/vendor-report', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        const results = await db.query(`
+            SELECT u.name, u.email, 
+                   COUNT(p.id) as total_parcels,
+                   SUM(CASE WHEN p.status = 'delivered' THEN 1 ELSE 0 END) as delivered,
+                   SUM(COALESCE(p.cod_amount, 0)) as total_cod
+            FROM users u 
+            LEFT JOIN parcels p ON u.id = p.vendor_id 
+            WHERE u.role = 'vendor' 
+            GROUP BY u.id, u.name, u.email
+        `);
+        res.json(results.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching vendor report' });
+    }
+});
+
+// Rider reports
+app.get('/api/rider-reports', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        const results = await db.query(`
+            SELECT u.name, u.email,
+                   COUNT(p.id) as assigned_parcels,
+                   SUM(CASE WHEN p.status = 'delivered' THEN 1 ELSE 0 END) as delivered_parcels
+            FROM users u 
+            LEFT JOIN parcels p ON u.id = p.assigned_rider_id 
+            WHERE u.role = 'rider' 
+            GROUP BY u.id, u.name, u.email
+        `);
+        res.json(results.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching rider reports' });
+    }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
