@@ -272,6 +272,36 @@ app.get('/api/users', auth, (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+});query = 'UPDATE parcels SET status = $1, rider_comment = $2 WHERE id = $3';
+    let params = [status, delivery_comment || null, req.params.id];
+    
+    db.query(query, params, (err, result) => {
+        if (err) {
+            console.error('Update delivery error:', err);
+            return res.status(500).json({ message: 'Error updating delivery status' });
+        }
+        res.json({ message: 'Delivery status updated successfully' });
+    });
+});
+
+// Get users (for admin)
+app.get('/api/users', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    db.query('SELECT id, name, email, role, is_approved FROM users ORDER BY created_at DESC', (err, results) => {
+        if (err) {
+            console.error('Fetch users error:', err);
+            return res.status(500).json({ message: 'Error fetching users' });
+        }
+        res.json(results.rows);
+    });
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });s = [status, delivery_comment || null, req.params.id];
     
     if (req.user.role === 'rider') {
