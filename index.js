@@ -272,6 +272,126 @@ app.get('/api/vendor-report', auth, async (req, res) => {
         }
         
         const results = await db.query(`
+            SELECT DATE(p.created_at) as date, u.name as vendor_name, 
+                   COUNT(p.id) as total_parcels,
+                   SUM(COALESCE(p.cod_amount, 0)) as total_cod
+            FROM users u 
+            LEFT JOIN parcels p ON u.id = p.vendor_id 
+            WHERE u.role = 'vendor' AND p.id IS NOT NULL
+            GROUP BY DATE(p.created_at), u.id, u.name
+            ORDER BY date DESC
+        `);
+        res.json(results.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching vendor report' });
+    }
+});
+
+// Rider reports
+app.get('/api/rider-reports', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        const results = await db.query(`
+            SELECT u.id, u.name as rider_name, u.email,
+                   '' as citizenship_no, '' as bike_no, '' as license_no,
+                   0 as total_km,
+                   COUNT(DISTINCT p.id) as total_parcels_delivered,
+                   0 as working_days
+            FROM users u 
+            LEFT JOIN parcels p ON u.id = p.assigned_rider_id AND p.status = 'delivered'
+            WHERE u.role = 'rider' AND u.is_approved = true
+            GROUP BY u.id, u.name, u.email
+        `);
+        res.json(results.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching rider reports' });
+    }
+});
+
+// Rider daybook details
+app.get('/api/rider-daybook-details/:riderId', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        res.json([]);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching rider daybook' });
+    }
+});
+
+// Staff activities
+app.get('/api/staff-activities', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        const query = `
+            SELECT sa.*, u.name as staff_name 
+            FROM staff_activities sa 
+            LEFT JOIN users u ON sa.staff_id = u.id 
+            ORDER BY sa.created_at DESC
+        `;
+        
+        const results = await db.query(query);
+        res.json(results.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching staff activities' });
+    }
+});
+
+app.post('/api/staff-activities', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        const { staff_id, activity_type, amount, notes } = req.body;
+        
+        const result = await db.query('INSERT INTO staff_activities (staff_id, activity_type, amount, notes) VALUES ($1, $2, $3, $4) RETURNING id',
+            [staff_id, activity_type, amount || 0, notes || null]);
+        
+        res.json({ message: 'Staff activity recorded successfully', id: result.rows[0].id });
+    } catch (error) {
+        res.status(500).json({ message: 'Error creating staff activity' });
+    }
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+
+module.exports = app;   let query = 'SELECT DATE(created_at) as date, status, COUNT(*) as count, SUM(COALESCE(cod_amount, 0)) as total_cod FROM parcels';
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY DATE(created_at), status ORDER BY date DESC';
+        
+        const results = await db.query(query, params);
+        res.json(results.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching daily financial report' });
+    }
+});
+
+// Vendor report
+app.get('/api/vendor-report', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        const results = await db.query(`
             SELECT u.name, u.email, 
                    COUNT(p.id) as total_parcels,
                    SUM(CASE WHEN p.status = 'delivered' THEN 1 ELSE 0 END) as delivered,
