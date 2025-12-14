@@ -189,10 +189,50 @@ app.get('/api/financial-report-daily', auth, (req, res) => {
 // Assign rider
 app.put('/api/parcels/:id/assign', auth, (req, res) => {
     const { rider_id } = req.body;
-    db.query('UPDATE parcels SET assigned_rider_id = ?, status = "assigned" WHERE id = ?',
-        [rider_id, req.params.id], (err, result) => {
+    const status = rider_id ? 'assigned' : 'pending';
+    db.query('UPDATE parcels SET assigned_rider_id = ?, status = ? WHERE id = ?',
+        [rider_id || null, status, req.params.id], (err, result) => {
         if (err) return res.status(500).json({ message: 'Error assigning parcel' });
-        res.json({ message: 'Parcel assigned successfully' });
+        res.json({ message: 'Parcel updated successfully' });
+    });
+});
+
+// Staff activities
+app.get('/api/staff-activities', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    const query = `
+        SELECT sa.*, u.name as staff_name 
+        FROM staff_activities sa 
+        LEFT JOIN users u ON sa.staff_id = u.id 
+        ORDER BY sa.created_at DESC
+    `;
+    
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error('Fetch staff activities error:', err);
+            return res.status(500).json({ message: 'Error fetching staff activities' });
+        }
+        res.json(results);
+    });
+});
+
+app.post('/api/staff-activities', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    const { staff_id, activity_type, amount, reason, notes } = req.body;
+    
+    db.query('INSERT INTO staff_activities (staff_id, activity_type, amount, reason, notes) VALUES (?, ?, ?, ?, ?)',
+        [staff_id, activity_type, amount || 0, reason, notes || null], (err, result) => {
+        if (err) {
+            console.error('Create staff activity error:', err);
+            return res.status(500).json({ message: 'Error creating staff activity' });
+        }
+        res.json({ message: 'Staff activity recorded successfully', id: result.insertId });
     });
 });
 
