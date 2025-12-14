@@ -196,6 +196,34 @@ app.get('/api/users', auth, async (req, res) => {
     }
 });
 
+// Approve user
+app.put('/api/users/:id/approve', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        await db.query('UPDATE users SET is_approved = true WHERE id = $1', [req.params.id]);
+        res.json({ message: 'User approved successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error approving user' });
+    }
+});
+
+// Delete user
+app.delete('/api/users/:id', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        
+        await db.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+        res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error deleting user' });
+    }
+});
+
 // Financial reports
 app.get('/api/financial-report', auth, async (req, res) => {
     try {
