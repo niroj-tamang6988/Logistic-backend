@@ -18,8 +18,10 @@ app.use(express.json());
 
 // Database connection
 const db = new Pool({
-    connectionString: 'postgresql://postgres:NirojTamang@db.mydygbnplhusevdmuloe.supabase.co:5432/postgres',
-    ssl: { rejectUnauthorized: false }
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:NirojTamang@db.mydygbnplhusevdmuloe.supabase.co:5432/postgres',
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000
 });
 
 // Auth middleware
