@@ -37,7 +37,7 @@ const auth = (req, res, next) => {
 
 // Health check
 app.get('/', (req, res) => {
-    res.json({ message: 'API is running' });
+    res.json({ message: 'API is running - Updated' });
 });
 
 // Register
