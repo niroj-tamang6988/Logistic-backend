@@ -168,31 +168,36 @@ app.put('/api/parcels/:id/delivery', auth, async (req, res) => {
 // Get stats
 app.get('/api/stats', auth, async (req, res) => {
     try {
-        let totalQuery = 'SELECT COUNT(*) as total FROM parcels';
-        let statusQuery = 'SELECT status, COUNT(*) as count FROM parcels';
+        let query = 'SELECT status, COUNT(*) as count FROM parcels';
         let params = [];
         
         if (req.user.role === 'vendor') {
-            totalQuery += ' WHERE vendor_id = $1';
-            statusQuery += ' WHERE vendor_id = $1';
+            query += ' WHERE vendor_id = $1';
             params = [req.user.id];
         } else if (req.user.role === 'rider') {
-            totalQuery += ' WHERE assigned_rider_id = $1';
-            statusQuery += ' WHERE assigned_rider_id = $1';
+            query += ' WHERE assigned_rider_id = $1';
             params = [req.user.id];
         }
         
-        statusQuery += ' GROUP BY status';
+        query += ' GROUP BY status';
         
-        const [totalResult, statusResults] = await Promise.all([
-            db.query(totalQuery, params),
-            db.query(statusQuery, params)
-        ]);
+        const results = await db.query(query, params);
         
+        // Create stats object with default values
         const stats = {
-            total: parseInt(totalResult.rows[0].total),
-            byStatus: statusResults.rows
+            total: 0,
+            pending: 0,
+            assigned: 0,
+            delivered: 0,
+            'not delivered': 0
         };
+        
+        // Calculate totals from results
+        results.rows.forEach(row => {
+            const count = parseInt(row.count);
+            stats.total += count;
+            stats[row.status] = count;
+        });
         
         res.json(stats);
     } catch (error) {
