@@ -207,24 +207,13 @@ app.get('/api/stats', auth, async (req, res) => {
         
         const results = await db.query(query, params);
         
-        const stats = {
-            total: 0,
-            pending: 0,
-            assigned: 0,
-            delivered: 0,
-            'not delivered': 0
-        };
+        // Return array format that frontend expects
+        const statsArray = results.rows.map(row => ({
+            status: row.status,
+            count: parseInt(row.count)
+        }));
         
-        results.rows.forEach(row => {
-            const count = parseInt(row.count);
-            stats.total += count;
-            // Map any status that exists in our stats object
-            if (row.status in stats) {
-                stats[row.status] = count;
-            }
-        });
-        
-        res.json(stats);
+        res.json(statsArray);
     } catch (error) {
         console.error('Stats error:', error.message);
         res.status(500).json({ message: 'Error fetching stats' });
