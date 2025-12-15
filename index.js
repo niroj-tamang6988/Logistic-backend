@@ -117,19 +117,45 @@ app.post('/api/login', async (req, res) => {
 // Get parcels
 app.get('/api/parcels', auth, async (req, res) => {
     try {
+        const { search } = req.query;
         let query = 'SELECT p.*, u.name as vendor_name, r.name as rider_name FROM parcels p LEFT JOIN users u ON p.vendor_id = u.id LEFT JOIN users r ON p.assigned_rider_id = r.id';
         let params = [];
+        let whereConditions = [];
         
+        // Role-based filtering
         if (req.user.role === 'vendor') {
-            query += ' WHERE p.vendor_id = $1';
-            params = [req.user.id];
+            whereConditions.push('p.vendor_id = $' + (params.length + 1));
+            params.push(req.user.id);
         } else if (req.user.role === 'rider') {
-            query += ' WHERE p.assigned_rider_id = $1';
-            params = [req.user.id];
+            whereConditions.push('p.assigned_rider_id = $' + (params.length + 1));
+            params.push(req.user.id);
         }
         
+        // Search functionality
+        if (search) {
+            whereConditions.push('(p.recipient_name ILIKE $' + (params.length + 1) + ' OR p.address ILIKE $' + (params.length + 2) + ' OR p.recipient_phone ILIKE $' + (params.length + 3) + ')');
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        }
+        
+        if (whereConditions.length > 0) {
+            query += ' WHERE ' + whereConditions.join(' AND ');
+        }
+        
+        query += ' ORDER BY DATE(p.created_at) DESC, p.created_at DESC';
+        
         const results = await db.query(query, params);
-        res.json(results.rows);
+        
+        // Group parcels by date
+        const groupedParcels = {};
+        results.rows.forEach(parcel => {
+            const date = new Date(parcel.created_at).toDateString();
+            if (!groupedParcels[date]) {
+                groupedParcels[date] = [];
+            }
+            groupedParcels[date].push(parcel);
+        });
+        
+        res.json(groupedParcels);
     } catch (error) {
         console.error('Parcels error:', error.message);
         res.status(500).json({ message: 'Error fetching parcels' });
