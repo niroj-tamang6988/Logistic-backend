@@ -323,6 +323,48 @@ app.get('/api/rider-reports', auth, async (req, res) => {
     }
 });
 
+// Financial report
+app.get('/api/financial-report', auth, async (req, res) => {
+    try {
+        let query = 'SELECT status, COUNT(*) as count, SUM(cod_amount) as total_cod FROM parcels';
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY status';
+        
+        const results = await db.query(query, params);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Financial report error:', error.message);
+        res.status(500).json({ message: 'Error fetching financial report' });
+    }
+});
+
+// Daily financial report
+app.get('/api/financial-report-daily', auth, async (req, res) => {
+    try {
+        let query = 'SELECT DATE(created_at) as date, status, COUNT(*) as count, SUM(cod_amount) as total_cod FROM parcels';
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY DATE(created_at), status ORDER BY DATE(created_at) DESC';
+        
+        const results = await db.query(query, params);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Daily financial report error:', error.message);
+        res.status(500).json({ message: 'Error fetching daily financial report' });
+    }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
