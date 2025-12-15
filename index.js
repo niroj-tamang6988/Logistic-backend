@@ -217,7 +217,9 @@ app.get('/api/stats', auth, async (req, res) => {
         results.rows.forEach(row => {
             const count = parseInt(row.count);
             stats.total += count;
-            stats[row.status] = count;
+            if (stats.hasOwnProperty(row.status)) {
+                stats[row.status] = count;
+            }
         });
         
         res.json(stats);
