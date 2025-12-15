@@ -3,7 +3,7 @@
   "builds": [
     {
       "src": "index.js",
-      "use": "@vercel/node@3.2.14"
+      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -14,7 +14,10 @@
   ],
   "functions": {
     "index.js": {
-      "runtime": "nodejs24.x"
+      "runtime": "nodejs20.x"
     }
+  },
+  "env": {
+    "NODE_ENV": "production"
   }
 }

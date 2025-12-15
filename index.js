@@ -7,7 +7,14 @@ const app = express();
 
 // CORS middleware
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const allowedOrigins = process.env.NODE_ENV === 'production' 
+        ? ['https://your-frontend-domain.vercel.app'] 
+        : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+    
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+    }
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     if (req.method === 'OPTIONS') return res.status(200).end();
@@ -18,8 +25,8 @@ app.use(express.json());
 
 // Database connection
 const db = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_MiFC8yadsf2x@ep-empty-shape-ah6kyix1-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
-    ssl: { rejectUnauthorized: false }
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
 // Auth middleware
@@ -27,7 +34,7 @@ const auth = (req, res, next) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     if (!token) return res.status(401).json({ message: 'No token provided' });
     try {
-        const decoded = jwt.verify(token, 'logistic_delivery_management_system_secret_key_2024');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
         next();
     } catch (error) {
@@ -84,7 +91,7 @@ app.post('/api/login', async (req, res) => {
             return res.status(403).json({ message: 'Account pending admin approval' });
         }
         
-        const token = jwt.sign({ id: user.id, role: user.role }, 'logistic_delivery_management_system_secret_key_2024');
+        const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET);
         res.json({ token, user: { id: user.id, name: user.name, role: user.role } });
     } catch (error) {
         console.error('Login error:', error.message);
