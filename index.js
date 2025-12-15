@@ -201,6 +201,7 @@ app.get('/api/stats', auth, async (req, res) => {
             query += ' WHERE assigned_rider_id = $1';
             params = [req.user.id];
         }
+        // Admin sees all parcels - no WHERE clause
         
         query += ' GROUP BY status';
         
@@ -217,7 +218,8 @@ app.get('/api/stats', auth, async (req, res) => {
         results.rows.forEach(row => {
             const count = parseInt(row.count);
             stats.total += count;
-            if (stats.hasOwnProperty(row.status)) {
+            // Map any status that exists in our stats object
+            if (row.status in stats) {
                 stats[row.status] = count;
             }
         });
