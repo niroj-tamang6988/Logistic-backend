@@ -8,7 +8,7 @@ const app = express();
 // CORS middleware
 app.use((req, res, next) => {
     const allowedOrigins = process.env.NODE_ENV === 'production' 
-        ? ['https://logistic-frontend-six.vercel.app'] 
+        ? ['https://logistic-frontend-six.vercel.app', 'http://localhost:3000', 'http://127.0.0.1:3000'] 
         : ['http://localhost:3000', 'http://127.0.0.1:3000'];
     
     const origin = req.headers.origin;
