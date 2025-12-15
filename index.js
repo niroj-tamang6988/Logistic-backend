@@ -40,6 +40,28 @@ app.get('/', (req, res) => {
     res.json({ message: 'API WORKING - DEPLOYMENT SUCCESS 2025' });
 });
 
+// Test endpoint
+app.get('/test', (req, res) => {
+    res.json({ message: 'Test endpoint working', timestamp: new Date().toISOString() });
+});
+
+// Debug endpoint
+app.get('/debug', async (req, res) => {
+    try {
+        const parcels = await db.query('SELECT COUNT(*) as total FROM parcels');
+        const users = await db.query('SELECT COUNT(*) as total FROM users');
+        const statuses = await db.query('SELECT status, COUNT(*) as count FROM parcels GROUP BY status');
+        
+        res.json({
+            total_parcels: parcels.rows[0].total,
+            total_users: users.rows[0].total,
+            parcel_statuses: statuses.rows
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Register
 app.post('/api/register', async (req, res) => {
     try {
