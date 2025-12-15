@@ -16,7 +16,7 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Database connection - Neon PostgreSQL
+// Database connection
 const db = new Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_MiFC8yadsf2x@ep-empty-shape-ah6kyix1-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
     ssl: { rejectUnauthorized: false }
@@ -37,7 +37,7 @@ const auth = (req, res, next) => {
 
 // Health check
 app.get('/', (req, res) => {
-    res.json({ message: 'API is running - Stats Fixed' });
+    res.json({ message: 'API WORKING - FRESH DEPLOY 2024' });
 });
 
 // Register
@@ -67,9 +67,7 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ message: 'Email and password required' });
         }
         
-        console.log('Attempting login for:', email);
         const results = await db.query('SELECT * FROM users WHERE email = $1', [email]);
-        console.log('Query result:', results.rows.length);
         
         if (results.rows.length === 0) {
             return res.status(400).json({ message: 'User not found' });
@@ -94,7 +92,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// Get parcels
+// Get parcels - FIXED WITH RIDER FILTERING
 app.get('/api/parcels', auth, async (req, res) => {
     try {
         let query = 'SELECT p.*, u.name as vendor_name, r.name as rider_name FROM parcels p LEFT JOIN users u ON p.vendor_id = u.id LEFT JOIN users r ON p.assigned_rider_id = r.id';
@@ -165,7 +163,7 @@ app.put('/api/parcels/:id/delivery', auth, async (req, res) => {
     }
 });
 
-// Get stats
+// Get stats - FIXED FORMAT
 app.get('/api/stats', auth, async (req, res) => {
     try {
         let query = 'SELECT status, COUNT(*) as count FROM parcels';
@@ -183,7 +181,6 @@ app.get('/api/stats', auth, async (req, res) => {
         
         const results = await db.query(query, params);
         
-        // Create stats object with default values
         const stats = {
             total: 0,
             pending: 0,
@@ -192,7 +189,6 @@ app.get('/api/stats', auth, async (req, res) => {
             'not delivered': 0
         };
         
-        // Calculate totals from results
         results.rows.forEach(row => {
             const count = parseInt(row.count);
             stats.total += count;
@@ -251,11 +247,3 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
-// Latest deployment;
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});" / /   L a t e s t   d e p l o y m e n t "      
- " c o n s t   P O R T   =   p r o c e s s . e n v . P O R T   | |   5 0 0 0 ;   a p p . l i s t e n ( P O R T ,   ( )   = >   {   c o n s o l e . l o g ( \ ` S e r v e r   r u n n i n g   o n   p o r t   \ $ { P O R T } \ ` ) ;   } ) ; "      
- 
