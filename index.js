@@ -290,7 +290,7 @@ app.get('/api/vendor-report', auth, async (req, res) => {
 app.get('/api/rider-reports', auth, async (req, res) => {
     try {
         const results = await db.query(`
-            SELECT 
+            SELECT DISTINCT
                 u.id,
                 u.name as rider_name,
                 u.email,
@@ -301,7 +301,7 @@ app.get('/api/rider-reports', auth, async (req, res) => {
                 0 as total_km,
                 1 as working_days
             FROM users u 
-            LEFT JOIN parcels p ON u.id = p.assigned_rider_id
+            INNER JOIN parcels p ON u.id = p.assigned_rider_id
             WHERE u.role = 'rider' AND u.is_approved = true
             GROUP BY u.id, u.name, u.email
         `);
