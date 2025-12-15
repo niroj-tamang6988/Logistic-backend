@@ -257,4 +257,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });" / /   L a t e s t   d e p l o y m e n t "      
+ " c o n s t   P O R T   =   p r o c e s s . e n v . P O R T   | |   5 0 0 0 ;   a p p . l i s t e n ( P O R T ,   ( )   = >   {   c o n s o l e . l o g ( \ ` S e r v e r   r u n n i n g   o n   p o r t   \ $ { P O R T } \ ` ) ;   } ) ; "      
  
