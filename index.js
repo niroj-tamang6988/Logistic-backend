@@ -276,6 +276,53 @@ app.delete('/api/users/:id', auth, async (req, res) => {
     }
 });
 
+// Vendor report
+app.get('/api/vendor-report', auth, async (req, res) => {
+    try {
+        const results = await db.query(`
+            SELECT 
+                u.name as vendor_name,
+                DATE(p.created_at) as date,
+                COUNT(p.id) as total_parcels,
+                SUM(p.cod_amount) as total_cod
+            FROM parcels p 
+            JOIN users u ON p.vendor_id = u.id 
+            GROUP BY u.name, DATE(p.created_at)
+            ORDER BY DATE(p.created_at) DESC
+        `);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Vendor report error:', error.message);
+        res.status(500).json({ message: 'Error fetching vendor report' });
+    }
+});
+
+// Rider reports
+app.get('/api/rider-reports', auth, async (req, res) => {
+    try {
+        const results = await db.query(`
+            SELECT 
+                u.id,
+                u.name as rider_name,
+                u.email,
+                '' as citizenship_no,
+                '' as bike_no,
+                '' as license_no,
+                COUNT(p.id) as total_parcels_delivered,
+                0 as total_km,
+                1 as working_days
+            FROM users u 
+            LEFT JOIN parcels p ON u.id = p.assigned_rider_id
+            WHERE u.role = 'rider' AND u.is_approved = true
+            GROUP BY u.id, u.name, u.email
+        `);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Rider reports error:', error.message);
+        res.status(500).json({ message: 'Error fetching rider reports' });
+    }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
