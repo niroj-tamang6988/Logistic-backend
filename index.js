@@ -8,7 +8,7 @@ const app = express();
 // CORS middleware
 app.use((req, res, next) => {
     const allowedOrigins = process.env.NODE_ENV === 'production' 
-        ? ['https://your-frontend-domain.vercel.app'] 
+        ? ['https://logistic-frontend-six.vercel.app'] 
         : ['http://localhost:3000', 'http://127.0.0.1:3000'];
     
     const origin = req.headers.origin;
@@ -52,16 +52,16 @@ app.post('/api/register', async (req, res) => {
     try {
         const { name, email, password, role } = req.body;
         const hashedPassword = await bcrypt.hash(password, 10);
-        const isApproved = role === 'admin' ? true : false;
+        const isApproved = role === 'admin';
         
-        const result = await db.query('INSERT INTO users (name, email, password, role, is_approved) VALUES ($1, $2, $3, $4, $5) RETURNING id', 
+        await db.query('INSERT INTO users (name, email, password, role, is_approved) VALUES ($1, $2, $3, $4, $5)', 
             [name, email, hashedPassword, role, isApproved]);
         
         const message = role === 'admin' ? 'Admin registered successfully' : 'Registration successful. Please wait for admin approval to login.';
         res.json({ message });
     } catch (error) {
         console.error('Register error:', error.message);
-        res.status(400).json({ message: 'Register error: ' + error.message });
+        res.status(400).json({ message: 'Registration failed' });
     }
 });
 
@@ -95,11 +95,11 @@ app.post('/api/login', async (req, res) => {
         res.json({ token, user: { id: user.id, name: user.name, role: user.role } });
     } catch (error) {
         console.error('Login error:', error.message);
-        res.status(500).json({ message: 'Login error: ' + error.message });
+        res.status(500).json({ message: 'Login failed' });
     }
 });
 
-// Get parcels - FIXED WITH RIDER FILTERING
+// Get parcels
 app.get('/api/parcels', auth, async (req, res) => {
     try {
         let query = 'SELECT p.*, u.name as vendor_name, r.name as rider_name FROM parcels p LEFT JOIN users u ON p.vendor_id = u.id LEFT JOIN users r ON p.assigned_rider_id = r.id';
@@ -116,7 +116,7 @@ app.get('/api/parcels', auth, async (req, res) => {
         const results = await db.query(query, params);
         res.json(results.rows);
     } catch (error) {
-        console.error('Parcels error:', error);
+        console.error('Parcels error:', error.message);
         res.status(500).json({ message: 'Error fetching parcels' });
     }
 });
@@ -130,7 +130,7 @@ app.post('/api/parcels', auth, async (req, res) => {
         
         res.json({ message: 'Parcel placed successfully', id: result.rows[0].id });
     } catch (error) {
-        console.error('Create parcel error:', error);
+        console.error('Create parcel error:', error.message);
         res.status(500).json({ message: 'Error creating parcel' });
     }
 });
@@ -141,6 +141,7 @@ app.get('/api/riders', auth, async (req, res) => {
         const results = await db.query('SELECT id, name FROM users WHERE role = $1 AND is_approved = $2', ['rider', true]);
         res.json(results.rows);
     } catch (error) {
+        console.error('Riders error:', error.message);
         res.status(500).json({ message: 'Error fetching riders' });
     }
 });
@@ -154,6 +155,7 @@ app.put('/api/parcels/:id/assign', auth, async (req, res) => {
             [rider_id || null, status, req.params.id]);
         res.json({ message: 'Parcel updated successfully' });
     } catch (error) {
+        console.error('Assign error:', error.message);
         res.status(500).json({ message: 'Error assigning parcel' });
     }
 });
@@ -166,11 +168,12 @@ app.put('/api/parcels/:id/delivery', auth, async (req, res) => {
             [status, delivery_comment || null, req.params.id]);
         res.json({ message: 'Delivery status updated successfully' });
     } catch (error) {
+        console.error('Delivery error:', error.message);
         res.status(500).json({ message: 'Error updating delivery status' });
     }
 });
 
-// Get stats - FIXED FORMAT
+// Get stats
 app.get('/api/stats', auth, async (req, res) => {
     try {
         let query = 'SELECT status, COUNT(*) as count FROM parcels';
@@ -204,6 +207,7 @@ app.get('/api/stats', auth, async (req, res) => {
         
         res.json(stats);
     } catch (error) {
+        console.error('Stats error:', error.message);
         res.status(500).json({ message: 'Error fetching stats' });
     }
 });
@@ -218,6 +222,7 @@ app.get('/api/users', auth, async (req, res) => {
         const results = await db.query('SELECT id, name, email, role, is_approved, created_at FROM users ORDER BY created_at DESC');
         res.json(results.rows);
     } catch (error) {
+        console.error('Users error:', error.message);
         res.status(500).json({ message: 'Error fetching users' });
     }
 });
@@ -232,6 +237,7 @@ app.put('/api/users/:id/approve', auth, async (req, res) => {
         await db.query('UPDATE users SET is_approved = true WHERE id = $1', [req.params.id]);
         res.json({ message: 'User approved successfully' });
     } catch (error) {
+        console.error('Approve error:', error.message);
         res.status(500).json({ message: 'Error approving user' });
     }
 });
@@ -246,6 +252,7 @@ app.delete('/api/users/:id', auth, async (req, res) => {
         await db.query('DELETE FROM users WHERE id = $1', [req.params.id]);
         res.json({ message: 'User deleted successfully' });
     } catch (error) {
+        console.error('Delete error:', error.message);
         res.status(500).json({ message: 'Error deleting user' });
     }
 });
