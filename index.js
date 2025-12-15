@@ -103,6 +103,9 @@ app.get('/api/parcels', auth, async (req, res) => {
         if (req.user.role === 'vendor') {
             query += ' WHERE p.vendor_id = $1';
             params = [req.user.id];
+        } else if (req.user.role === 'rider') {
+            query += ' WHERE p.assigned_rider_id = $1';
+            params = [req.user.id];
         }
         
         const results = await db.query(query, params);
@@ -165,18 +168,33 @@ app.put('/api/parcels/:id/delivery', auth, async (req, res) => {
 // Get stats
 app.get('/api/stats', auth, async (req, res) => {
     try {
-        let query = 'SELECT status, COUNT(*) as count FROM parcels';
+        let totalQuery = 'SELECT COUNT(*) as total FROM parcels';
+        let statusQuery = 'SELECT status, COUNT(*) as count FROM parcels';
         let params = [];
         
         if (req.user.role === 'vendor') {
-            query += ' WHERE vendor_id = $1';
+            totalQuery += ' WHERE vendor_id = $1';
+            statusQuery += ' WHERE vendor_id = $1';
+            params = [req.user.id];
+        } else if (req.user.role === 'rider') {
+            totalQuery += ' WHERE assigned_rider_id = $1';
+            statusQuery += ' WHERE assigned_rider_id = $1';
             params = [req.user.id];
         }
         
-        query += ' GROUP BY status';
+        statusQuery += ' GROUP BY status';
         
-        const results = await db.query(query, params);
-        res.json(results.rows);
+        const [totalResult, statusResults] = await Promise.all([
+            db.query(totalQuery, params),
+            db.query(statusQuery, params)
+        ]);
+        
+        const stats = {
+            total: parseInt(totalResult.rows[0].total),
+            byStatus: statusResults.rows
+        };
+        
+        res.json(stats);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching stats' });
     }
