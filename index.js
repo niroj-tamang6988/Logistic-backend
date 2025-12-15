@@ -44,7 +44,7 @@ const auth = (req, res, next) => {
 
 // Health check
 app.get('/', (req, res) => {
-    res.json({ message: 'API FIXED AND WORKING 2025' });
+    res.json({ message: 'API WORKING - DEPLOYMENT SUCCESS 2025' });
 });
 
 // Register
@@ -260,5 +260,4 @@ app.delete('/api/users/:id', auth, async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-});" / /   F o r c e   d e p l o y   $ ( d a t e ) "    
- 
+});
