@@ -37,7 +37,7 @@ const auth = (req, res, next) => {
 
 // Health check
 app.get('/', (req, res) => {
-    res.json({ message: 'API is running - Updated' });
+    res.json({ message: 'API is running - Updated with fixes' });
 });
 
 // Register
@@ -241,6 +241,11 @@ app.delete('/api/users/:id', auth, async (req, res) => {
         res.status(500).json({ message: 'Error deleting user' });
     }
 });
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});;
 
 // Financial reports
 app.get('/api/financial-report', auth, async (req, res) => {
