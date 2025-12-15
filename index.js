@@ -260,6 +260,6 @@ app.delete('/api/users/:id', auth, async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-});" / /   D E P L O Y   N O W   $ ( d a t e ) "      
- " / /   T r i g g e r   d e p l o y m e n t   f o r   l o g i s t i c - b a c k e n d - v 3 "      
- 
+});
+
+module.exports = app;
