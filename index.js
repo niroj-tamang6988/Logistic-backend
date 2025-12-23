@@ -174,8 +174,13 @@ app.get('/api/parcels', auth, async (req, res) => {
 app.post('/api/parcels', auth, async (req, res) => {
     try {
         const { recipient_name, recipient_address, recipient_phone, cod_amount } = req.body;
-        const result = await db.query('INSERT INTO parcels (vendor_id, recipient_name, address, recipient_phone, cod_amount, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-            [req.user.id, recipient_name, recipient_address, recipient_phone, cod_amount || 0, 'pending']);
+        
+        // Create timestamp in Nepal timezone
+        const now = new Date();
+        const nepalTime = new Date(now.getTime() + (5 * 60 + 45) * 60 * 1000);
+        
+        const result = await db.query('INSERT INTO parcels (vendor_id, recipient_name, address, recipient_phone, cod_amount, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+            [req.user.id, recipient_name, recipient_address, recipient_phone, cod_amount || 0, 'pending', nepalTime]);
         
         res.json({ message: 'Parcel placed successfully', id: result.rows[0].id });
     } catch (error) {
@@ -219,6 +224,30 @@ app.put('/api/parcels/:id/delivery', auth, async (req, res) => {
     } catch (error) {
         console.error('Delivery error:', error.message);
         res.status(500).json({ message: 'Error updating delivery status' });
+    }
+});
+
+// Fix existing parcel dates (admin only)
+app.put('/api/fix-dates', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+        
+        // Update all existing parcels to Nepal timezone
+        const result = await db.query(`
+            UPDATE parcels 
+            SET created_at = created_at + INTERVAL '5 hours 45 minutes'
+            WHERE created_at < NOW() - INTERVAL '1 day'
+        `);
+        
+        res.json({ 
+            message: 'Dates updated successfully', 
+            updated_count: result.rowCount 
+        });
+    } catch (error) {
+        console.error('Fix dates error:', error.message);
+        res.status(500).json({ message: 'Error fixing dates' });
     }
 });
 
