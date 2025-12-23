@@ -51,11 +51,15 @@ app.get('/debug', async (req, res) => {
         const parcels = await db.query('SELECT COUNT(*) as total FROM parcels');
         const users = await db.query('SELECT COUNT(*) as total FROM users');
         const statuses = await db.query('SELECT status, COUNT(*) as count FROM parcels GROUP BY status');
+        const sampleDates = await db.query('SELECT id, created_at, DATE(created_at) as date_only FROM parcels ORDER BY created_at DESC LIMIT 5');
         
         res.json({
             total_parcels: parcels.rows[0].total,
             total_users: users.rows[0].total,
-            parcel_statuses: statuses.rows
+            parcel_statuses: statuses.rows,
+            sample_dates: sampleDates.rows,
+            current_server_time: new Date().toISOString(),
+            current_server_date: new Date().toDateString()
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
