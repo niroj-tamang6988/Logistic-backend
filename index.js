@@ -234,15 +234,16 @@ app.put('/api/fix-dates', auth, async (req, res) => {
             return res.status(403).json({ message: 'Admin access required' });
         }
         
-        // Update all existing parcels to Nepal timezone
+        // Update all existing parcels created before today to Nepal timezone
         const result = await db.query(`
             UPDATE parcels 
             SET created_at = created_at + INTERVAL '5 hours 45 minutes'
-            WHERE created_at < NOW() - INTERVAL '1 day'
+            WHERE created_at < (NOW() AT TIME ZONE 'UTC') - INTERVAL '1 hour'
+            AND created_at < '2025-12-23 00:00:00'
         `);
         
         res.json({ 
-            message: 'Dates updated successfully', 
+            message: 'Old dates updated to Nepal timezone', 
             updated_count: result.rowCount 
         });
     } catch (error) {
