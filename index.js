@@ -145,18 +145,22 @@ app.get('/api/parcels', auth, async (req, res) => {
             query += ' WHERE ' + whereConditions.join(' AND ');
         }
         
-        query += ' ORDER BY DATE(p.created_at) DESC, p.created_at DESC';
+        query += ' ORDER BY p.created_at DESC';
         
         const results = await db.query(query, params);
         
-        // Group parcels by date
+        // Group parcels by Nepal date (UTC+5:45)
         const groupedParcels = {};
         results.rows.forEach(parcel => {
-            const date = new Date(parcel.created_at).toDateString();
-            if (!groupedParcels[date]) {
-                groupedParcels[date] = [];
+            // Convert UTC to Nepal time (UTC+5:45)
+            const utcDate = new Date(parcel.created_at);
+            const nepalTime = new Date(utcDate.getTime() + (5 * 60 + 45) * 60 * 1000);
+            const dateKey = nepalTime.toISOString().split('T')[0]; // YYYY-MM-DD format
+            
+            if (!groupedParcels[dateKey]) {
+                groupedParcels[dateKey] = [];
             }
-            groupedParcels[date].push(parcel);
+            groupedParcels[dateKey].push(parcel);
         });
         
         res.json(groupedParcels);
