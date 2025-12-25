@@ -354,14 +354,21 @@ app.get('/api/vendor-report', auth, async (req, res) => {
 app.get('/api/rider-reports', auth, async (req, res) => {
     try {
         const results = await db.query(`
-            SELECT DISTINCT
+            SELECT 
                 u.id,
                 u.name as rider_name,
                 u.email,
                 '' as citizenship_no,
                 '' as bike_no,
                 '' as license_no,
-                COUNT(p.id) as total_parcels_delivered,
+                COUNT(p.id) as total_parcels,
+                SUM(p.cod_amount) as total_cod,
+                COUNT(CASE WHEN p.status = 'delivered' THEN 1 END) as delivered_parcels,
+                SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END) as delivered_cod,
+                COUNT(CASE WHEN p.status = 'assigned' THEN 1 END) as assigned_parcels,
+                SUM(CASE WHEN p.status = 'assigned' THEN p.cod_amount ELSE 0 END) as assigned_cod,
+                COUNT(CASE WHEN p.status = 'not_delivered' THEN 1 END) as not_delivered_parcels,
+                SUM(CASE WHEN p.status = 'not_delivered' THEN p.cod_amount ELSE 0 END) as not_delivered_cod,
                 0 as total_km,
                 1 as working_days
             FROM users u 
