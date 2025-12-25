@@ -227,6 +227,56 @@ app.put('/api/parcels/:id/delivery', auth, async (req, res) => {
     }
 });
 
+// Get parcel totals by status
+app.get('/api/parcel-totals', auth, async (req, res) => {
+    try {
+        let query = 'SELECT status, COUNT(*) as count FROM parcels';
+        let params = [];
+        
+        // Role-based filtering
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = $1';
+            params.push(req.user.id);
+        } else if (req.user.role === 'rider') {
+            query += ' WHERE assigned_rider_id = $1';
+            params.push(req.user.id);
+        }
+        
+        query += ' GROUP BY status';
+        
+        const results = await db.query(query, params);
+        
+        // Initialize counts
+        const totals = {
+            assigned: 0,
+            delivered: 0,
+            not_delivered: 0,
+            in_progress: 0,
+            pending: 0
+        };
+        
+        // Map results to totals
+        results.rows.forEach(row => {
+            if (row.status === 'assigned') {
+                totals.assigned = parseInt(row.count);
+                totals.in_progress += parseInt(row.count); // assigned parcels are in progress
+            } else if (row.status === 'delivered') {
+                totals.delivered = parseInt(row.count);
+            } else if (row.status === 'not_delivered') {
+                totals.not_delivered = parseInt(row.count);
+            } else if (row.status === 'pending') {
+                totals.pending = parseInt(row.count);
+                totals.in_progress += parseInt(row.count); // pending parcels are also in progress
+            }
+        });
+        
+        res.json(totals);
+    } catch (error) {
+        console.error('Parcel totals error:', error.message);
+        res.status(500).json({ message: 'Error fetching parcel totals' });
+    }
+});
+
 // Fix existing parcel dates (admin only)
 app.put('/api/fix-dates', auth, async (req, res) => {
     try {
