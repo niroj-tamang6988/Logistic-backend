@@ -350,6 +350,28 @@ app.get('/api/vendor-report', auth, async (req, res) => {
     }
 });
 
+// Rider daily status report
+app.get('/api/rider-daily-status/:riderId', auth, async (req, res) => {
+    try {
+        const { riderId } = req.params;
+        const results = await db.query(`
+            SELECT 
+                DATE(p.created_at) as date,
+                p.status,
+                COUNT(*) as count,
+                SUM(p.cod_amount) as total_cod
+            FROM parcels p 
+            WHERE p.assigned_rider_id = $1
+            GROUP BY DATE(p.created_at), p.status 
+            ORDER BY DATE(p.created_at) DESC, p.status
+        `, [riderId]);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Rider daily status error:', error.message);
+        res.status(500).json({ message: 'Error fetching rider daily status' });
+    }
+});
+
 // Rider reports
 app.get('/api/rider-reports', auth, async (req, res) => {
     try {
