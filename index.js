@@ -400,15 +400,24 @@ app.get('/api/financial-report', auth, async (req, res) => {
 // Daily financial report
 app.get('/api/financial-report-daily', auth, async (req, res) => {
     try {
-        let query = 'SELECT DATE(created_at) as date, status, COUNT(*) as count, SUM(cod_amount) as total_cod FROM parcels';
+        let query = `
+            SELECT 
+                DATE(p.created_at) as date,
+                u.name as vendor_name,
+                p.status,
+                COUNT(*) as count,
+                SUM(p.cod_amount) as total_cod
+            FROM parcels p 
+            JOIN users u ON p.vendor_id = u.id
+        `;
         let params = [];
         
         if (req.user.role === 'vendor') {
-            query += ' WHERE vendor_id = $1';
+            query += ' WHERE p.vendor_id = $1';
             params = [req.user.id];
         }
         
-        query += ' GROUP BY DATE(created_at), status ORDER BY DATE(created_at) DESC';
+        query += ' GROUP BY DATE(p.created_at), u.name, p.status ORDER BY DATE(p.created_at) DESC, u.name, p.status';
         
         const results = await db.query(query, params);
         res.json(results.rows);
