@@ -354,6 +354,41 @@ app.post('/api/payments', auth, async (req, res) => {
     }
 });
 
+// Delete payment (admin only)
+app.delete('/api/payments/:id', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+        
+        await db.query('DELETE FROM payment_history WHERE id = $1', [req.params.id]);
+        res.json({ message: 'Payment deleted successfully' });
+    } catch (error) {
+        console.error('Delete payment error:', error.message);
+        res.status(500).json({ message: 'Error deleting payment' });
+    }
+});
+
+// Update payment (admin only)
+app.put('/api/payments/:id', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+        
+        const { amount, notes } = req.body;
+        await db.query(
+            'UPDATE payment_history SET amount = $1, notes = $2 WHERE id = $3',
+            [amount, notes || '', req.params.id]
+        );
+        
+        res.json({ message: 'Payment updated successfully' });
+    } catch (error) {
+        console.error('Update payment error:', error.message);
+        res.status(500).json({ message: 'Error updating payment' });
+    }
+});
+
 // Get vendor payment summary
 app.get('/api/vendor-payment-summary', auth, async (req, res) => {
     try {
