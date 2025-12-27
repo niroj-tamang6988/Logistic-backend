@@ -372,13 +372,26 @@ app.get('/api/vendor-payment-summary', auth, async (req, res) => {
             SELECT 
                 u.id as vendor_id,
                 u.name as vendor_name,
-                COUNT(p.id) as total_parcels,
-                COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) as total_delivered_amount,
-                COALESCE(SUM(ph.amount), 0) as total_paid_amount,
-                COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) - COALESCE(SUM(ph.amount), 0) as pending_amount
+                COALESCE(parcel_data.total_parcels, 0) as total_parcels,
+                COALESCE(parcel_data.total_delivered_amount, 0) as total_delivered_amount,
+                COALESCE(payment_data.total_paid_amount, 0) as total_paid_amount,
+                COALESCE(parcel_data.total_delivered_amount, 0) - COALESCE(payment_data.total_paid_amount, 0) as pending_amount
             FROM users u
-            LEFT JOIN parcels p ON u.id = p.vendor_id
-            LEFT JOIN payment_history ph ON u.id = ph.vendor_id
+            LEFT JOIN (
+                SELECT 
+                    vendor_id,
+                    COUNT(*) as total_parcels,
+                    SUM(CASE WHEN status = 'delivered' THEN cod_amount ELSE 0 END) as total_delivered_amount
+                FROM parcels 
+                GROUP BY vendor_id
+            ) parcel_data ON u.id = parcel_data.vendor_id
+            LEFT JOIN (
+                SELECT 
+                    vendor_id,
+                    SUM(amount) as total_paid_amount
+                FROM payment_history 
+                GROUP BY vendor_id
+            ) payment_data ON u.id = payment_data.vendor_id
             WHERE u.role = 'vendor' AND u.is_approved = true
         `;
         let params = [];
@@ -388,7 +401,7 @@ app.get('/api/vendor-payment-summary', auth, async (req, res) => {
             params = [req.user.id];
         }
         
-        query += ' GROUP BY u.id, u.name ORDER BY u.name';
+        query += ' ORDER BY u.name';
         
         const results = await db.query(query, params);
         res.json(results.rows);
