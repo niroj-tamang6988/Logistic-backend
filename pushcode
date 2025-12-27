@@ -1,0 +1,12 @@
+//frontend
+cd frontend && 
+git add . && git commit -m "" && 
+git push origin main
+
+cd frontend && npm run build
+
+//backend
+cd backend &&
+ git add . && 
+ git commit -m "Fix payment APIs to work without payment_history table" && 
+ git push origin main

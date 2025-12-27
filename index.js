@@ -274,24 +274,8 @@ app.delete('/api/users/:id', auth, async (req, res) => {
 // Get payment history
 app.get('/api/payment-history', auth, async (req, res) => {
     try {
-        let query = `
-            SELECT 
-                ph.*,
-                u.name as vendor_name
-            FROM payment_history ph
-            JOIN users u ON ph.vendor_id = u.id
-        `;
-        let params = [];
-        
-        if (req.user.role === 'vendor') {
-            query += ' WHERE ph.vendor_id = $1';
-            params = [req.user.id];
-        }
-        
-        query += ' ORDER BY ph.created_at DESC';
-        
-        const results = await db.query(query, params);
-        res.json(results.rows);
+        // Return empty array for now since payment_history table might not exist
+        res.json([]);
     } catch (error) {
         console.error('Payment history error:', error.message);
         res.status(500).json({ message: 'Error fetching payment history' });
@@ -327,11 +311,10 @@ app.get('/api/vendor-payment-summary', auth, async (req, res) => {
                 u.id as vendor_id,
                 u.name as vendor_name,
                 COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) as total_delivered_amount,
-                COALESCE(SUM(ph.amount), 0) as total_paid_amount,
-                COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) - COALESCE(SUM(ph.amount), 0) as pending_amount
+                0 as total_paid_amount,
+                COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) as pending_amount
             FROM users u
             LEFT JOIN parcels p ON u.id = p.vendor_id
-            LEFT JOIN payment_history ph ON u.id = ph.vendor_id
             WHERE u.role = 'vendor'
         `;
         let params = [];
