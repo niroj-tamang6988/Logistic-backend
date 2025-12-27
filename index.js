@@ -379,6 +379,226 @@ app.delete('/api/users/:id', auth, async (req, res) => {
     }
 });
 
+// Get payment history
+app.get('/api/payment-history', auth, async (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                ph.*,
+                u.name as vendor_name
+            FROM payment_history ph
+            JOIN users u ON ph.vendor_id = u.id
+        `;
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE ph.vendor_id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' ORDER BY ph.created_at DESC';
+        
+        const results = await db.query(query, params);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Payment history error:', error.message);
+        res.status(500).json({ message: 'Error fetching payment history' });
+    }
+});
+
+// Add payment (admin only)
+app.post('/api/payments', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+        
+        const { vendor_id, amount, notes } = req.body;
+        
+        await db.query(
+            'INSERT INTO payment_history (vendor_id, amount, notes, created_at) VALUES ($1, $2, $3, NOW())',
+            [vendor_id, amount, notes || '']
+        );
+        
+        res.json({ message: 'Payment recorded successfully' });
+    } catch (error) {
+        console.error('Add payment error:', error.message);
+        res.status(500).json({ message: 'Error recording payment' });
+    }
+});
+
+// Get vendor payment summary
+app.get('/api/vendor-payment-summary', auth, async (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                u.id as vendor_id,
+                u.name as vendor_name,
+                COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) as total_delivered_amount,
+                COALESCE(SUM(ph.amount), 0) as total_paid_amount,
+                COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) - COALESCE(SUM(ph.amount), 0) as pending_amount
+            FROM users u
+            LEFT JOIN parcels p ON u.id = p.vendor_id
+            LEFT JOIN payment_history ph ON u.id = ph.vendor_id
+            WHERE u.role = 'vendor'
+        `;
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' AND u.id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY u.id, u.name ORDER BY u.name';
+        
+        const results = await db.query(query, params);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Vendor payment summary error:', error.message);
+        res.status(500).json({ message: 'Error fetching vendor payment summary' });
+    }
+});
+
+// Vendor report
+app.get('/api/vendor-report', auth, async (req, res) => {
+    try {
+        const results = await db.query(`
+            SELECT 
+                u.name as vendor_name,
+                DATE(p.created_at) as date,
+                COUNT(p.id) as total_parcels,
+                SUM(p.cod_amount) as total_cod
+            FROM parcels p 
+            JOIN users u ON p.vendor_id = u.id 
+            GROUP BY u.name, DATE(p.created_at)
+            ORDER BY DATE(p.created_at) DESC
+        `);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Vendor report error:', error.message);
+        res.status(500).json({ message: 'Error fetching vendor report' });
+    }
+});
+
+// Rider daily status report
+app.get('/api/rider-daily-status/:riderId', auth, async (req, res) => {
+    try {
+        const { riderId } = req.params;
+        const results = await db.query(`
+            SELECT 
+                DATE(p.created_at) as date,
+                p.status,
+                COUNT(*) as count,
+                SUM(p.cod_amount) as total_cod
+            FROM parcels p 
+            WHERE p.assigned_rider_id = $1
+            GROUP BY DATE(p.created_at), p.status 
+            ORDER BY DATE(p.created_at) DESC, p.status
+        `, [riderId]);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Rider daily status error:', error.message);
+        res.status(500).json({ message: 'Error fetching rider daily status' });
+    }
+});
+
+// Rider reports
+app.get('/api/rider-reports', auth, async (req, res) => {
+    try {
+        const results = await db.query(`
+            SELECT 
+                u.id,
+                u.name as rider_name,
+                u.email,
+                '' as citizenship_no,
+                '' as bike_no,
+                '' as license_no,
+                COUNT(p.id) as total_parcels,
+                SUM(p.cod_amount) as total_cod,
+                COUNT(CASE WHEN p.status = 'delivered' THEN 1 END) as delivered_parcels,
+                SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END) as delivered_cod,
+                COUNT(CASE WHEN p.status = 'assigned' THEN 1 END) as assigned_parcels,
+                SUM(CASE WHEN p.status = 'assigned' THEN p.cod_amount ELSE 0 END) as assigned_cod,
+                COUNT(CASE WHEN p.status = 'not_delivered' THEN 1 END) as not_delivered_parcels,
+                SUM(CASE WHEN p.status = 'not_delivered' THEN p.cod_amount ELSE 0 END) as not_delivered_cod,
+                0 as total_km,
+                1 as working_days
+            FROM users u 
+            INNER JOIN parcels p ON u.id = p.assigned_rider_id
+            WHERE u.role = 'rider' AND u.is_approved = true
+            GROUP BY u.id, u.name, u.email
+        `);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Rider reports error:', error.message);
+        res.status(500).json({ message: 'Error fetching rider reports' });
+    }
+});
+
+// Financial report
+app.get('/api/financial-report', auth, async (req, res) => {
+    try {
+        let query = 'SELECT status, COUNT(*) as count, SUM(cod_amount) as total_cod FROM parcels';
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE vendor_id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY status';
+        
+        const results = await db.query(query, params);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Financial report error:', error.message);
+        res.status(500).json({ message: 'Error fetching financial report' });
+    }
+});
+
+// Daily financial report
+app.get('/api/financial-report-daily', auth, async (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                DATE(p.created_at) as date,
+                u.name as vendor_name,
+                p.status,
+                COUNT(*) as count,
+                SUM(p.cod_amount) as total_cod
+            FROM parcels p 
+            JOIN users u ON p.vendor_id = u.id
+        `;
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE p.vendor_id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' GROUP BY DATE(p.created_at), u.name, p.status ORDER BY DATE(p.created_at) DESC, u.name, p.status';
+        
+        const results = await db.query(query, params);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Daily financial report error:', error.message);
+        res.status(500).json({ message: 'Error fetching daily financial report' });
+    }
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+
+module.exports = app]);
+        res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+        console.error('Delete error:', error.message);
+        res.status(500).json({ message: 'Error deleting user' });
+    }
+});
+
 // Vendor report
 app.get('/api/vendor-report', auth, async (req, res) => {
     try {
