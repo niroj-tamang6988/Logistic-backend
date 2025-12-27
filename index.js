@@ -339,7 +339,7 @@ app.get('/api/vendor-payment-summary', auth, async (req, res) => {
                 COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) as pending_amount
             FROM users u
             LEFT JOIN parcels p ON u.id = p.vendor_id
-            WHERE u.role = 'vendor'
+            WHERE u.role = 'vendor' AND u.is_approved = true
         `;
         let params = [];
         
