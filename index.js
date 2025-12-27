@@ -196,6 +196,30 @@ app.put('/api/parcels/:id/delivery', auth, async (req, res) => {
     }
 });
 
+// Edit parcel
+app.put('/api/parcels/:id', auth, async (req, res) => {
+    try {
+        const { recipient_name, recipient_address, recipient_phone, cod_amount } = req.body;
+        await db.query('UPDATE parcels SET recipient_name = $1, address = $2, recipient_phone = $3, cod_amount = $4 WHERE id = $5',
+            [recipient_name, recipient_address, recipient_phone, cod_amount || 0, req.params.id]);
+        res.json({ message: 'Parcel updated successfully' });
+    } catch (error) {
+        console.error('Edit parcel error:', error.message);
+        res.status(500).json({ message: 'Error updating parcel' });
+    }
+});
+
+// Delete parcel
+app.delete('/api/parcels/:id', auth, async (req, res) => {
+    try {
+        await db.query('DELETE FROM parcels WHERE id = $1', [req.params.id]);
+        res.json({ message: 'Parcel deleted successfully' });
+    } catch (error) {
+        console.error('Delete parcel error:', error.message);
+        res.status(500).json({ message: 'Error deleting parcel' });
+    }
+});
+
 // Get stats
 app.get('/api/stats', auth, async (req, res) => {
     try {
