@@ -7,7 +7,7 @@ const app = express();
 
 // CORS middleware
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', 'https://logistic-green-six.vercel.app');
+    res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     if (req.method === 'OPTIONS') return res.status(200).end();
@@ -38,32 +38,6 @@ const auth = (req, res, next) => {
 // Health check
 app.get('/', (req, res) => {
     res.json({ message: 'API WORKING - DEPLOYMENT SUCCESS 2025' });
-});
-
-// Test endpoint
-app.get('/test', (req, res) => {
-    res.json({ message: 'Test endpoint working', timestamp: new Date().toISOString() });
-});
-
-// Debug endpoint
-app.get('/debug', async (req, res) => {
-    try {
-        const parcels = await db.query('SELECT COUNT(*) as total FROM parcels');
-        const users = await db.query('SELECT COUNT(*) as total FROM users');
-        const statuses = await db.query('SELECT status, COUNT(*) as count FROM parcels GROUP BY status');
-        const sampleDates = await db.query('SELECT id, created_at, DATE(created_at) as date_only FROM parcels ORDER BY created_at DESC LIMIT 5');
-        
-        res.json({
-            total_parcels: parcels.rows[0].total,
-            total_users: users.rows[0].total,
-            parcel_statuses: statuses.rows,
-            sample_dates: sampleDates.rows,
-            current_server_time: new Date().toISOString(),
-            current_server_date: new Date().toDateString()
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
 });
 
 // Register
@@ -126,7 +100,6 @@ app.get('/api/parcels', auth, async (req, res) => {
         let params = [];
         let whereConditions = [];
         
-        // Role-based filtering
         if (req.user.role === 'vendor') {
             whereConditions.push('p.vendor_id = $' + (params.length + 1));
             params.push(req.user.id);
@@ -135,7 +108,6 @@ app.get('/api/parcels', auth, async (req, res) => {
             params.push(req.user.id);
         }
         
-        // Search functionality
         if (search) {
             whereConditions.push('(p.recipient_name ILIKE $' + (params.length + 1) + ' OR p.address ILIKE $' + (params.length + 2) + ' OR p.recipient_phone ILIKE $' + (params.length + 3) + ')');
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
@@ -149,13 +121,11 @@ app.get('/api/parcels', auth, async (req, res) => {
         
         const results = await db.query(query, params);
         
-        // Group parcels by Nepal date (UTC+5:45)
         const groupedParcels = {};
         results.rows.forEach(parcel => {
-            // Convert UTC to Nepal time (UTC+5:45)
             const utcDate = new Date(parcel.created_at);
             const nepalTime = new Date(utcDate.getTime() + (5 * 60 + 45) * 60 * 1000);
-            const dateKey = nepalTime.toISOString().split('T')[0]; // YYYY-MM-DD format
+            const dateKey = nepalTime.toISOString().split('T')[0];
             
             if (!groupedParcels[dateKey]) {
                 groupedParcels[dateKey] = [];
@@ -175,7 +145,6 @@ app.post('/api/parcels', auth, async (req, res) => {
     try {
         const { recipient_name, recipient_address, recipient_phone, cod_amount } = req.body;
         
-        // Create timestamp in Nepal timezone
         const now = new Date();
         const nepalTime = new Date(now.getTime() + (5 * 60 + 45) * 60 * 1000);
         
@@ -227,81 +196,6 @@ app.put('/api/parcels/:id/delivery', auth, async (req, res) => {
     }
 });
 
-// Get parcel totals by status
-app.get('/api/parcel-totals', auth, async (req, res) => {
-    try {
-        let query = 'SELECT status, COUNT(*) as count FROM parcels';
-        let params = [];
-        
-        // Role-based filtering
-        if (req.user.role === 'vendor') {
-            query += ' WHERE vendor_id = $1';
-            params.push(req.user.id);
-        } else if (req.user.role === 'rider') {
-            query += ' WHERE assigned_rider_id = $1';
-            params.push(req.user.id);
-        }
-        
-        query += ' GROUP BY status';
-        
-        const results = await db.query(query, params);
-        
-        // Initialize counts
-        const totals = {
-            assigned: 0,
-            delivered: 0,
-            not_delivered: 0,
-            in_progress: 0,
-            pending: 0
-        };
-        
-        // Map results to totals
-        results.rows.forEach(row => {
-            if (row.status === 'assigned') {
-                totals.assigned = parseInt(row.count);
-                totals.in_progress += parseInt(row.count); // assigned parcels are in progress
-            } else if (row.status === 'delivered') {
-                totals.delivered = parseInt(row.count);
-            } else if (row.status === 'not_delivered') {
-                totals.not_delivered = parseInt(row.count);
-            } else if (row.status === 'pending') {
-                totals.pending = parseInt(row.count);
-                totals.in_progress += parseInt(row.count); // pending parcels are also in progress
-            }
-        });
-        
-        res.json(totals);
-    } catch (error) {
-        console.error('Parcel totals error:', error.message);
-        res.status(500).json({ message: 'Error fetching parcel totals' });
-    }
-});
-
-// Fix existing parcel dates (admin only)
-app.put('/api/fix-dates', auth, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ message: 'Admin access required' });
-        }
-        
-        // Update all existing parcels created before today to Nepal timezone
-        const result = await db.query(`
-            UPDATE parcels 
-            SET created_at = created_at + INTERVAL '5 hours 45 minutes'
-            WHERE created_at < (NOW() AT TIME ZONE 'UTC') - INTERVAL '1 hour'
-            AND created_at < '2025-12-23 00:00:00'
-        `);
-        
-        res.json({ 
-            message: 'Old dates updated to Nepal timezone', 
-            updated_count: result.rowCount 
-        });
-    } catch (error) {
-        console.error('Fix dates error:', error.message);
-        res.status(500).json({ message: 'Error fixing dates' });
-    }
-});
-
 // Get stats
 app.get('/api/stats', auth, async (req, res) => {
     try {
@@ -315,13 +209,11 @@ app.get('/api/stats', auth, async (req, res) => {
             query += ' WHERE assigned_rider_id = $1';
             params = [req.user.id];
         }
-        // Admin sees all parcels - no WHERE clause
         
         query += ' GROUP BY status';
         
         const results = await db.query(query, params);
         
-        // Return array format that frontend expects
         const statsArray = results.rows.map(row => ({
             status: row.status,
             count: parseInt(row.count)
@@ -459,82 +351,6 @@ app.get('/api/vendor-payment-summary', auth, async (req, res) => {
     }
 });
 
-// Vendor report
-app.get('/api/vendor-report', auth, async (req, res) => {
-    try {
-        const results = await db.query(`
-            SELECT 
-                u.name as vendor_name,
-                DATE(p.created_at) as date,
-                COUNT(p.id) as total_parcels,
-                SUM(p.cod_amount) as total_cod
-            FROM parcels p 
-            JOIN users u ON p.vendor_id = u.id 
-            GROUP BY u.name, DATE(p.created_at)
-            ORDER BY DATE(p.created_at) DESC
-        `);
-        res.json(results.rows);
-    } catch (error) {
-        console.error('Vendor report error:', error.message);
-        res.status(500).json({ message: 'Error fetching vendor report' });
-    }
-});
-
-// Rider daily status report
-app.get('/api/rider-daily-status/:riderId', auth, async (req, res) => {
-    try {
-        const { riderId } = req.params;
-        const results = await db.query(`
-            SELECT 
-                DATE(p.created_at) as date,
-                p.status,
-                COUNT(*) as count,
-                SUM(p.cod_amount) as total_cod
-            FROM parcels p 
-            WHERE p.assigned_rider_id = $1
-            GROUP BY DATE(p.created_at), p.status 
-            ORDER BY DATE(p.created_at) DESC, p.status
-        `, [riderId]);
-        res.json(results.rows);
-    } catch (error) {
-        console.error('Rider daily status error:', error.message);
-        res.status(500).json({ message: 'Error fetching rider daily status' });
-    }
-});
-
-// Rider reports
-app.get('/api/rider-reports', auth, async (req, res) => {
-    try {
-        const results = await db.query(`
-            SELECT 
-                u.id,
-                u.name as rider_name,
-                u.email,
-                '' as citizenship_no,
-                '' as bike_no,
-                '' as license_no,
-                COUNT(p.id) as total_parcels,
-                SUM(p.cod_amount) as total_cod,
-                COUNT(CASE WHEN p.status = 'delivered' THEN 1 END) as delivered_parcels,
-                SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END) as delivered_cod,
-                COUNT(CASE WHEN p.status = 'assigned' THEN 1 END) as assigned_parcels,
-                SUM(CASE WHEN p.status = 'assigned' THEN p.cod_amount ELSE 0 END) as assigned_cod,
-                COUNT(CASE WHEN p.status = 'not_delivered' THEN 1 END) as not_delivered_parcels,
-                SUM(CASE WHEN p.status = 'not_delivered' THEN p.cod_amount ELSE 0 END) as not_delivered_cod,
-                0 as total_km,
-                1 as working_days
-            FROM users u 
-            INNER JOIN parcels p ON u.id = p.assigned_rider_id
-            WHERE u.role = 'rider' AND u.is_approved = true
-            GROUP BY u.id, u.name, u.email
-        `);
-        res.json(results.rows);
-    } catch (error) {
-        console.error('Rider reports error:', error.message);
-        res.status(500).json({ message: 'Error fetching rider reports' });
-    }
-});
-
 // Financial report
 app.get('/api/financial-report', auth, async (req, res) => {
     try {
@@ -586,19 +402,6 @@ app.get('/api/financial-report-daily', auth, async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
-
-module.exports = app]);
-        res.json({ message: 'User deleted successfully' });
-    } catch (error) {
-        console.error('Delete error:', error.message);
-        res.status(500).json({ message: 'Error deleting user' });
-    }
-});
-
 // Vendor report
 app.get('/api/vendor-report', auth, async (req, res) => {
     try {
@@ -617,28 +420,6 @@ app.get('/api/vendor-report', auth, async (req, res) => {
     } catch (error) {
         console.error('Vendor report error:', error.message);
         res.status(500).json({ message: 'Error fetching vendor report' });
-    }
-});
-
-// Rider daily status report
-app.get('/api/rider-daily-status/:riderId', auth, async (req, res) => {
-    try {
-        const { riderId } = req.params;
-        const results = await db.query(`
-            SELECT 
-                DATE(p.created_at) as date,
-                p.status,
-                COUNT(*) as count,
-                SUM(p.cod_amount) as total_cod
-            FROM parcels p 
-            WHERE p.assigned_rider_id = $1
-            GROUP BY DATE(p.created_at), p.status 
-            ORDER BY DATE(p.created_at) DESC, p.status
-        `, [riderId]);
-        res.json(results.rows);
-    } catch (error) {
-        console.error('Rider daily status error:', error.message);
-        res.status(500).json({ message: 'Error fetching rider daily status' });
     }
 });
 
@@ -675,54 +456,48 @@ app.get('/api/rider-reports', auth, async (req, res) => {
     }
 });
 
-// Financial report
-app.get('/api/financial-report', auth, async (req, res) => {
+// Rider daily status report
+app.get('/api/rider-daily-status/:riderId', auth, async (req, res) => {
     try {
-        let query = 'SELECT status, COUNT(*) as count, SUM(cod_amount) as total_cod FROM parcels';
-        let params = [];
-        
-        if (req.user.role === 'vendor') {
-            query += ' WHERE vendor_id = $1';
-            params = [req.user.id];
-        }
-        
-        query += ' GROUP BY status';
-        
-        const results = await db.query(query, params);
-        res.json(results.rows);
-    } catch (error) {
-        console.error('Financial report error:', error.message);
-        res.status(500).json({ message: 'Error fetching financial report' });
-    }
-});
-
-// Daily financial report
-app.get('/api/financial-report-daily', auth, async (req, res) => {
-    try {
-        let query = `
+        const { riderId } = req.params;
+        const results = await db.query(`
             SELECT 
                 DATE(p.created_at) as date,
-                u.name as vendor_name,
                 p.status,
                 COUNT(*) as count,
                 SUM(p.cod_amount) as total_cod
             FROM parcels p 
-            JOIN users u ON p.vendor_id = u.id
-        `;
-        let params = [];
-        
-        if (req.user.role === 'vendor') {
-            query += ' WHERE p.vendor_id = $1';
-            params = [req.user.id];
-        }
-        
-        query += ' GROUP BY DATE(p.created_at), u.name, p.status ORDER BY DATE(p.created_at) DESC, u.name, p.status';
-        
-        const results = await db.query(query, params);
+            WHERE p.assigned_rider_id = $1
+            GROUP BY DATE(p.created_at), p.status 
+            ORDER BY DATE(p.created_at) DESC, p.status
+        `, [riderId]);
         res.json(results.rows);
     } catch (error) {
-        console.error('Daily financial report error:', error.message);
-        res.status(500).json({ message: 'Error fetching daily financial report' });
+        console.error('Rider daily status error:', error.message);
+        res.status(500).json({ message: 'Error fetching rider daily status' });
+    }
+});
+
+// Rider daybook details
+app.get('/api/rider-daybook-details/:riderId', auth, async (req, res) => {
+    try {
+        const { riderId } = req.params;
+        const results = await db.query(`
+            SELECT 
+                DATE(created_at) as date,
+                0 as total_km,
+                COUNT(*) as parcels_delivered,
+                0 as fuel_cost,
+                '' as notes
+            FROM parcels 
+            WHERE assigned_rider_id = $1 AND status = 'delivered'
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at) DESC
+        `, [riderId]);
+        res.json(results.rows);
+    } catch (error) {
+        console.error('Rider daybook error:', error.message);
+        res.status(500).json({ message: 'Error fetching rider daybook' });
     }
 });
 
