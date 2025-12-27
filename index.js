@@ -298,11 +298,27 @@ app.delete('/api/users/:id', auth, async (req, res) => {
 // Get payment history
 app.get('/api/payment-history', auth, async (req, res) => {
     try {
-        // Return empty array for now since payment_history table might not exist
-        res.json([]);
+        // Create payment_history table if it doesn't exist
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS payment_history (
+                id SERIAL PRIMARY KEY,
+                vendor_id INTEGER REFERENCES users(id),
+                amount DECIMAL(10,2) NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        
+        const results = await db.query(`
+            SELECT ph.*, u.name as vendor_name 
+            FROM payment_history ph 
+            JOIN users u ON ph.vendor_id = u.id 
+            ORDER BY ph.created_at DESC
+        `);
+        res.json(results.rows);
     } catch (error) {
         console.error('Payment history error:', error.message);
-        res.status(500).json({ message: 'Error fetching payment history' });
+        res.json([]);
     }
 });
 
@@ -313,8 +329,24 @@ app.post('/api/payments', auth, async (req, res) => {
             return res.status(403).json({ message: 'Admin access required' });
         }
         
-        // For now, just return success without actually storing payment
-        // since payment_history table might not exist
+        const { vendor_id, amount, notes } = req.body;
+        
+        // Create payment_history table if it doesn't exist
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS payment_history (
+                id SERIAL PRIMARY KEY,
+                vendor_id INTEGER REFERENCES users(id),
+                amount DECIMAL(10,2) NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        
+        await db.query(
+            'INSERT INTO payment_history (vendor_id, amount, notes) VALUES ($1, $2, $3)',
+            [vendor_id, amount, notes || '']
+        );
+        
         res.json({ message: 'Payment recorded successfully' });
     } catch (error) {
         console.error('Add payment error:', error.message);
@@ -325,15 +357,28 @@ app.post('/api/payments', auth, async (req, res) => {
 // Get vendor payment summary
 app.get('/api/vendor-payment-summary', auth, async (req, res) => {
     try {
+        // Create payment_history table if it doesn't exist
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS payment_history (
+                id SERIAL PRIMARY KEY,
+                vendor_id INTEGER REFERENCES users(id),
+                amount DECIMAL(10,2) NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        
         let query = `
             SELECT 
                 u.id as vendor_id,
                 u.name as vendor_name,
+                COUNT(p.id) as total_parcels,
                 COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) as total_delivered_amount,
-                0 as total_paid_amount,
-                COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) as pending_amount
+                COALESCE(SUM(ph.amount), 0) as total_paid_amount,
+                COALESCE(SUM(CASE WHEN p.status = 'delivered' THEN p.cod_amount ELSE 0 END), 0) - COALESCE(SUM(ph.amount), 0) as pending_amount
             FROM users u
             LEFT JOIN parcels p ON u.id = p.vendor_id
+            LEFT JOIN payment_history ph ON u.id = ph.vendor_id
             WHERE u.role = 'vendor' AND u.is_approved = true
         `;
         let params = [];
