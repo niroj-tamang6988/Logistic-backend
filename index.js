@@ -309,12 +309,21 @@ app.get('/api/payment-history', auth, async (req, res) => {
             )
         `);
         
-        const results = await db.query(`
+        let query = `
             SELECT ph.*, u.name as vendor_name 
             FROM payment_history ph 
-            JOIN users u ON ph.vendor_id = u.id 
-            ORDER BY ph.created_at DESC
-        `);
+            JOIN users u ON ph.vendor_id = u.id
+        `;
+        let params = [];
+        
+        if (req.user.role === 'vendor') {
+            query += ' WHERE ph.vendor_id = $1';
+            params = [req.user.id];
+        }
+        
+        query += ' ORDER BY ph.created_at DESC';
+        
+        const results = await db.query(query, params);
         res.json(results.rows);
     } catch (error) {
         console.error('Payment history error:', error.message);
