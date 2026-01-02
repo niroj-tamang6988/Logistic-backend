@@ -418,8 +418,9 @@ app.get('/api/vendor-payment-summary', auth, async (req, res) => {
                 u.name as vendor_name,
                 COALESCE(parcel_data.total_parcels, 0) as total_parcels,
                 COALESCE(parcel_data.total_delivered_amount, 0) as total_delivered_amount,
+                COALESCE(parcel_data.total_parcels, 0) * 100 as total_parcel_charges,
                 COALESCE(payment_data.total_paid_amount, 0) as total_paid_amount,
-                COALESCE(parcel_data.total_delivered_amount, 0) - COALESCE(payment_data.total_paid_amount, 0) as pending_amount
+                COALESCE(parcel_data.total_delivered_amount, 0) - (COALESCE(parcel_data.total_parcels, 0) * 100) - COALESCE(payment_data.total_paid_amount, 0) as pending_amount
             FROM users u
             LEFT JOIN (
                 SELECT 

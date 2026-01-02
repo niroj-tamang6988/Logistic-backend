@@ -1,6 +1,7 @@
 //frontend
 cd frontend && 
-git add . && git commit -m "" && 
+git add . &&
+ git commit -m "your code has been commited" && 
 git push origin main
 
 cd frontend && npm run build
