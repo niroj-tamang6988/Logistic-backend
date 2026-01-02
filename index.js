@@ -196,6 +196,23 @@ app.put('/api/parcels/:id/delivery', auth, async (req, res) => {
     }
 });
 
+// Mark parcel as returned (admin only)
+app.put('/api/parcels/:id/return', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+        
+        const { return_reason } = req.body;
+        await db.query('UPDATE parcels SET status = $1, rider_comment = $2 WHERE id = $3',
+            ['returned', return_reason || 'Returned by admin', req.params.id]);
+        res.json({ message: 'Parcel marked as returned successfully' });
+    } catch (error) {
+        console.error('Return parcel error:', error.message);
+        res.status(500).json({ message: 'Error returning parcel' });
+    }
+});
+
 // Edit parcel
 app.put('/api/parcels/:id', auth, async (req, res) => {
     try {
