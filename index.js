@@ -434,6 +434,7 @@ app.get('/api/vendor-payment-summary', auth, async (req, res) => {
                 u.id as vendor_id,
                 u.name as vendor_name,
                 COALESCE(parcel_data.total_parcels, 0) as total_parcels,
+                COALESCE(parcel_data.returned_parcels, 0) as returned_parcels,
                 COALESCE(parcel_data.total_delivered_amount, 0) as total_delivered_amount,
                 COALESCE(parcel_data.total_parcels, 0) * 100 as total_parcel_charges,
                 COALESCE(payment_data.total_paid_amount, 0) as total_paid_amount,
@@ -442,7 +443,8 @@ app.get('/api/vendor-payment-summary', auth, async (req, res) => {
             LEFT JOIN (
                 SELECT 
                     vendor_id,
-                    COUNT(*) as total_parcels,
+                    COUNT(CASE WHEN status != 'pending' THEN 1 END) as total_parcels,
+                    COUNT(CASE WHEN status = 'returned' THEN 1 END) as returned_parcels,
                     SUM(CASE WHEN status = 'delivered' THEN cod_amount ELSE 0 END) as total_delivered_amount
                 FROM parcels 
                 GROUP BY vendor_id
